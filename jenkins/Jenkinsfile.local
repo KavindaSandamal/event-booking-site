@@ -83,24 +83,26 @@ pipeline {
                 echo '🚀 Deploying to local environment...'
                 script {
                     sh '''
+                        ls -l /workspace  # Debug: list files before running compose
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $WORKSPACE:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml pull
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:/workspace -w /workspace \
+                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml pull
 
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $WORKSPACE:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml up -d
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:/workspace -w /workspace \
+                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml up -d
 
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $WORKSPACE:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml ps
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:/workspace -w /workspace \
+                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml ps
                     '''
                 }
             }
         }
+
     }
 
     post {

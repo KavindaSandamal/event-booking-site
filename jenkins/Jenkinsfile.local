@@ -10,8 +10,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo '🔍 Checking out code...'
-                checkout scm
+                echo '🔍 Using code from initial SCM checkout (no re-checkout)'
             }
         }
 
@@ -61,6 +60,19 @@ pipeline {
                         docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG}
                         docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG}
                         docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG}
+
+                        # Tag as latest for deploy compose
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:latest
+
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:latest
                     """
                 }
             }
@@ -70,8 +82,26 @@ pipeline {
             steps {
                 echo '🚀 Deploying to local environment...'
                 script {
-                    // Simulate deployment
-                    sh 'echo "Deployment completed successfully"'
+                    def composeFile = "${env.WORKSPACE}/docker-compose.deploy.local.yml"
+                    sh """
+                        echo Using compose file: ${composeFile}
+                        ls -la ${env.WORKSPACE} | sed -n '1,200p'
+
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f ${composeFile} pull
+
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f ${composeFile} up -d
+
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f ${composeFile} ps
+                    """
                 }
             }
         }

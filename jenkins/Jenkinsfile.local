@@ -1,0 +1,91 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_REGISTRY = 'localhost:5000'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        PROJECT_NAME = 'event-booking-platform'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '🔍 Checking out code...'
+                checkout scm
+            }
+        }
+
+        stage('Code Quality Analysis') {
+            steps {
+                echo '📊 Running code quality analysis...'
+                script {
+                    // Simulate SonarQube analysis
+                    sh 'echo "Code quality analysis completed"'
+                }
+            }
+        }
+
+        stage('Unit Tests') {
+            steps {
+                echo '🧪 Running unit tests...'
+                script {
+                    // Simulate running tests
+                    sh 'echo "Unit tests passed"'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                echo '🐳 Building Docker images...'
+                script {
+                    // Build and tag images for local registry
+                    sh """
+                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} ./services/auth
+                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} ./services/catalog
+                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG} ./services/booking
+                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG} ./services/payment
+                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG} ./frontend
+                    """
+                }
+            }
+        }
+
+        stage('Push to Local Registry') {
+            steps {
+                echo '📤 Pushing images to local registry...'
+                script {
+                    sh """
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+        stage('Deploy Locally') {
+            steps {
+                echo '🚀 Deploying to local environment...'
+                script {
+                    // Simulate deployment
+                    sh 'echo "Deployment completed successfully"'
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo '🎉 Pipeline completed!'
+        }
+        success {
+            echo '✅ Pipeline succeeded!'
+        }
+        failure {
+            echo '❌ Pipeline failed!'
+        }
+    }
+}

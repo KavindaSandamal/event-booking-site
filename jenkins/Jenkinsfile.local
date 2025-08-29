@@ -18,7 +18,6 @@ pipeline {
             steps {
                 echo '📊 Running code quality analysis...'
                 script {
-                    // Simulate SonarQube analysis
                     sh 'echo "Code quality analysis completed"'
                 }
             }
@@ -28,7 +27,6 @@ pipeline {
             steps {
                 echo '🧪 Running unit tests...'
                 script {
-                    // Simulate running tests
                     sh 'echo "Unit tests passed"'
                 }
             }
@@ -38,7 +36,6 @@ pipeline {
             steps {
                 echo '🐳 Building Docker images...'
                 script {
-                    // Build and tag images for local registry
                     sh """
                         docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} ./services/auth
                         docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} ./services/catalog
@@ -81,9 +78,7 @@ pipeline {
         stage('Debug Workspace') {
             steps {
                 echo '🔍 Checking workspace contents...'
-                sh """
-                    ls -R "$WORKSPACE" | sed -n '1,300p'
-                """
+                sh 'ls -R "$WORKSPACE" | sed -n "1,300p"'
             }
         }
 
@@ -91,27 +86,28 @@ pipeline {
             steps {
                 echo '🚀 Deploying to local environment...'
                 script {
-                    sh '''
-                        ls -l /workspace  # Debug: list files before running compose
-                        docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:/workspace -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml pull
+                    sh """
+                        echo '📂 Current Workspace:' 
+                        ls -l "$WORKSPACE"
 
                         docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:/workspace -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml up -d
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v "$WORKSPACE:$WORKSPACE" -w "$WORKSPACE" \
+                          docker/compose:1.29.2 -f docker-compose.deploy.local.yml pull
 
                         docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:/workspace -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml ps
-                    '''
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v "$WORKSPACE:$WORKSPACE" -w "$WORKSPACE" \
+                          docker/compose:1.29.2 -f docker-compose.deploy.local.yml up -d
+
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v "$WORKSPACE:$WORKSPACE" -w "$WORKSPACE" \
+                          docker/compose:1.29.2 -f docker-compose.deploy.local.yml ps
+                    """
                 }
             }
         }
-
     }
 
     post {

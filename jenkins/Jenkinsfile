@@ -1,0 +1,272 @@
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_REGISTRY = 'your-registry.com'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        PROJECT_NAME = 'event-booking-platform'
+        SONAR_TOKEN = credentials('sonar-token')
+        DOCKER_CREDENTIALS = credentials('docker-credentials')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${env.BUILD_NUMBER}"
+                }
+            }
+        }
+        
+        stage('Code Quality Analysis') {
+            parallel {
+                stage('SonarQube Analysis') {
+                    steps {
+                        script {
+                            withSonarQubeEnv('SonarQube') {
+                                sh """
+                                    mvn clean verify sonar:sonar \
+                                        -Dsonar.projectKey=${PROJECT_NAME} \
+                                        -Dsonar.sources=src \
+                                        -Dsonar.host.url=http://sonarqube:9000 \
+                                        -Dsonar.login=${SONAR_TOKEN}
+                                """
+                            }
+                        }
+                    }
+                }
+                
+                stage('Security Scan') {
+                    steps {
+                        script {
+                            sh """
+                                # Run OWASP dependency check
+                                mvn org.owasp:dependency-check-maven:check
+                                
+                                # Run Bandit for Python security
+                                pip install bandit
+                                bandit -r services/ -f json -o bandit-report.json
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            parallel {
+                stage('Backend Tests') {
+                    steps {
+                        script {
+                            dir('services/auth') {
+                                sh 'pip install -r requirements.txt'
+                                sh 'python -m pytest tests/ --cov=app --cov-report=xml'
+                            }
+                            dir('services/catalog') {
+                                sh 'pip install -r requirements.txt'
+                                sh 'python -m pytest tests/ --cov=app --cov-report=xml'
+                            }
+                            dir('services/booking') {
+                                sh 'pip install -r requirements.txt'
+                                sh 'python -m pytest tests/ --cov=app --cov-report=xml'
+                            }
+                            dir('services/payment') {
+                                sh 'pip install -r requirements.txt'
+                                sh 'python -m pytest tests/ --cov=app --cov-report=xml'
+                            }
+                        }
+                    }
+                }
+                
+                stage('Frontend Tests') {
+                    steps {
+                        script {
+                            dir('frontend') {
+                                sh 'npm ci'
+                                sh 'npm run test:coverage'
+                                sh 'npm run build'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            steps {
+                script {
+                    sh """
+                        # Start test infrastructure
+                        docker-compose -f docker-compose.test.yml up -d postgres redis rabbitmq kafka
+                        
+                        # Wait for services to be ready
+                        sleep 30
+                        
+                        # Run integration tests
+                        python -m pytest tests/integration/ -v
+                        
+                        # Cleanup
+                        docker-compose -f docker-compose.test.yml down
+                    """
+                }
+            }
+        }
+        
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Backend Images') {
+                    steps {
+                        script {
+                            sh """
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} services/auth/
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} services/catalog/
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG} services/booking/
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG} services/payment/
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-worker:${IMAGE_TAG} services/worker/
+                            """
+                        }
+                    }
+                }
+                
+                stage('Build Frontend Image') {
+                    steps {
+                        script {
+                            sh """
+                                docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG} frontend/
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Push Images') {
+            steps {
+                script {
+                    sh """
+                        echo ${DOCKER_CREDENTIALS_PSW} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_CREDENTIALS_USR} --password-stdin
+                        
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-worker:${IMAGE_TAG}
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG}
+                        
+                        # Tag as latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-worker:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-worker:latest
+                        docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:latest
+                        
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-worker:latest
+                        docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            when {
+                branch 'develop'
+            }
+            steps {
+                script {
+                    sh """
+                        # Update staging environment
+                        ssh user@staging-server "cd /opt/${PROJECT_NAME} && \
+                        docker-compose pull && \
+                        docker-compose up -d"
+                        
+                        # Run smoke tests
+                        sleep 60
+                        curl -f http://staging.yourdomain.com/health
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to Production') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh """
+                        # Update production environment
+                        ssh user@prod-server "cd /opt/${PROJECT_NAME} && \
+                        docker-compose pull && \
+                        docker-compose up -d"
+                        
+                        # Run health checks
+                        sleep 60
+                        curl -f https://yourdomain.com/health
+                        
+                        # Send notification
+                        curl -X POST https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK \
+                        -H 'Content-type: application/json' \
+                        -d '{"text":"🚀 Event Booking Platform deployed to production successfully! Build: ${IMAGE_TAG}"}'
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Cleanup
+            sh 'docker system prune -f'
+            
+            // Archive test results
+            archiveArtifacts artifacts: '**/test-results/**/*,**/coverage/**/*,**/reports/**/*', allowEmptyArchive: true
+            
+            // Publish test results
+            publishTestResults testResultsPattern: '**/test-results/**/*.xml'
+            
+            // Publish coverage reports
+            publishCoverage adapters: [coberturaAdapter('**/coverage/**/cobertura-coverage.xml')]
+        }
+        
+        success {
+            script {
+                // Update deployment status
+                currentBuild.description = "✅ Build successful - ${IMAGE_TAG}"
+                
+                // Tag successful build
+                sh """
+                    git tag -a "build-${IMAGE_TAG}" -m "Successful build ${IMAGE_TAG}"
+                    git push origin "build-${IMAGE_TAG}"
+                """
+            }
+        }
+        
+        failure {
+            script {
+                currentBuild.description = "❌ Build failed - ${IMAGE_TAG}"
+                
+                // Send failure notification
+                sh """
+                    curl -X POST https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK \
+                    -H 'Content-type: application/json' \
+                    -d '{"text":"🚨 Event Booking Platform build failed! Build: ${IMAGE_TAG} - ${env.BUILD_URL}"}'
+                """
+            }
+        }
+        
+        cleanup {
+            // Clean workspace
+            cleanWs()
+        }
+    }
+}

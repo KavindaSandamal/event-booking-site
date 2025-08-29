@@ -82,9 +82,9 @@ pipeline {
             steps {
                 echo '🚀 Deploying to local environment...'
                 script {
-                    def composeFile = "${env.WORKSPACE}/docker-compose.deploy.local.yml"
+                    def composeFile = "/workspace/docker-compose.deploy.local.yml"
                     sh """
-                        echo Using compose file: ${composeFile}
+                        echo Using compose file (inside container path): ${composeFile}
                         ls -la ${env.WORKSPACE} | sed -n '1,200p'
 
                         docker run --rm \

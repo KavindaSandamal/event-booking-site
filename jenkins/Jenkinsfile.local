@@ -10,8 +10,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                echo '🔍 Checking out code...'
-                checkout scm
+                echo '🔍 Using code from initial SCM checkout (no re-checkout)'
             }
         }
 
@@ -86,17 +85,17 @@ pipeline {
                     sh '''
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $(pwd):/workspace -w /workspace \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
                           docker/compose:1.29.2 -f docker-compose.deploy.local.yml pull
 
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $(pwd):/workspace -w /workspace \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
                           docker/compose:1.29.2 -f docker-compose.deploy.local.yml up -d
 
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v $(pwd):/workspace -w /workspace \
+                          -v ${WORKSPACE}:/workspace -w /workspace \
                           docker/compose:1.29.2 -f docker-compose.deploy.local.yml ps
                     '''
                 }

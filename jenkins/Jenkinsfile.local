@@ -106,32 +106,11 @@ pipeline {
                     }
 
                     echo "🚀 Deploying services using Docker Compose..."
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE} \
-                          -f ${WORK_DIR}/${COMPOSE_FILE} pull
-                    """
-
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE} \
-                          -f ${WORK_DIR}/${COMPOSE_FILE} up -d
-                    """
-
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE} \
-                          -f ${WORK_DIR}/${COMPOSE_FILE} ps
-                    """
+                    // Use docker-compose directly, assuming it is installed on the agent
+                    // This avoids potential issues with file paths inside the docker-in-docker container
+                    sh "docker-compose -f ${COMPOSE_FILE} pull"
+                    sh "docker-compose -f ${COMPOSE_FILE} up -d"
+                    sh "docker-compose -f ${COMPOSE_FILE} ps"
                 }
             }
         }

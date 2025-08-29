@@ -104,8 +104,6 @@ pipeline {
 
                     echo "🚀 Deploying services using Docker Compose..."
                     
-                    // The core fix: use the modern `docker:cli` image and the `docker compose` plugin syntax
-                    // This avoids the 'not found' error and the file path issues
                     sh """
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \

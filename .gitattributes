@@ -1,0 +1,18 @@
+# Normalize line endings to LF for CI environments (Jenkins/Linux)
+* text=auto eol=lf
+
+# Ensure shell scripts and YAML always use LF
+*.sh text eol=lf
+*.bash text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Jenkins pipelines and config
+jenkins/Jenkinsfile text eol=lf
+jenkins/Jenkinsfile.local text eol=lf
+jenkins/*.groovy text eol=lf
+
+# Dockerfiles
+Dockerfile text eol=lf
+**/Dockerfile text eol=lf
+

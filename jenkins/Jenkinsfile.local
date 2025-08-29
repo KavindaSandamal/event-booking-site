@@ -82,26 +82,22 @@ pipeline {
             steps {
                 echo '🚀 Deploying to local environment...'
                 script {
-                    def composeFile = "/workspace/docker-compose.deploy.local.yml"
-                    sh """
-                        echo Using compose file (inside container path): ${composeFile}
-                        ls -la ${env.WORKSPACE} | sed -n '1,200p'
+                    sh '''
+                        docker run --rm \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v $WORKSPACE:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml pull
 
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${WORKSPACE}:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f ${composeFile} pull
+                          -v $WORKSPACE:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml up -d
 
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${WORKSPACE}:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f ${composeFile} up -d
-
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${WORKSPACE}:/workspace -w /workspace \
-                          docker/compose:1.29.2 -f ${composeFile} ps
-                    """
+                          -v $WORKSPACE:/workspace -w /workspace \
+                          docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml ps
+                    '''
                 }
             }
         }

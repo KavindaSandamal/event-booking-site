@@ -1,15 +1,17 @@
-// Retry defaults for stages that reference them
-def MAX_RETRIES = 3
-def RETRY_DELAY = 5 // seconds
-
 pipeline {
     agent any
 
 environment {
-    COMPOSE_FILE = "dc.yml"
-    DOCKER_COMPOSE = "docker/compose:1.29.2"
-    WORK_DIR = "/workspace"
-}
+        DOCKER_REGISTRY = 'localhost:5000'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        PROJECT_NAME = 'event-booking-platform'
+        // Change the file name here
+        COMPOSE_FILE = "dc.yml"
+        WORK_DIR = "/workspace"
+        MAX_RETRIES = 3
+        RETRY_SLEEP = 10
+        DOCKER_COMPOSE = "docker/compose:1.29.2"
+    }
 
     stages {
         stage('Checkout') {

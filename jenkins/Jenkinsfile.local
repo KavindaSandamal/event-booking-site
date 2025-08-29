@@ -93,22 +93,21 @@ pipeline {
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v "$WORKSPACE:/workspace" -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml pull
+                        docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml pull
 
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v "$WORKSPACE:/workspace" -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml up -d
+                        docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml up -d
 
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v "$WORKSPACE:/workspace" -w /workspace \
-                        docker/compose:1.29.2 -f docker-compose.deploy.local.yml ps
+                        docker/compose:1.29.2 -f /workspace/docker-compose.deploy.local.yml ps
                     """
                 }
             }
         }
-
     }
 
     post {

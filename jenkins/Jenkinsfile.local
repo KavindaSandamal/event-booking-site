@@ -2,16 +2,10 @@ pipeline {
     agent any
 
 environment {
-        DOCKER_REGISTRY = 'localhost:5000'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
-        PROJECT_NAME = 'event-booking-platform'
-        // Change the file name here
-        COMPOSE_FILE = "dc.yml"
-        WORK_DIR = "/workspace"
-        MAX_RETRIES = 3
-        RETRY_SLEEP = 10
-        DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli'
-    }
+    COMPOSE_FILE = "dc.yml"
+    DOCKER_COMPOSE = "docker/compose:1.29.2"
+    WORK_DIR = "/workspace"
+}
 
     stages {
         stage('Checkout') {
@@ -96,49 +90,42 @@ environment {
         }
 
         stage('Deploy Locally') {
-            steps {
-                script {
-                    if (!fileExists("${COMPOSE_FILE}")) {
-                        error "❌ File ${COMPOSE_FILE} not found in workspace!"
-                    }
-
-                    echo "🚀 Deploying services using Docker Compose..."
-                    
-                    def workspaceAbsPath = pwd()
-                    // Get the current user's UID to pass to the container
-                    def jenkinsUserUid = sh(returnStdout: true, script: 'id -u').trim()
-
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${workspaceAbsPath}:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          --user ${jenkinsUserUid} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} pull
-                    """
-
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${workspaceAbsPath}:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          --user ${jenkinsUserUid} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} up -d
-                    """
-
-                    sh """
-                        docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v ${workspaceAbsPath}:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          --user ${jenkinsUserUid} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} ps
-                    """
-                }
+        steps {
+            script {
+            if (!fileExists("${COMPOSE_FILE}")) {
+                error "❌ File ${COMPOSE_FILE} not found in workspace!"
             }
+
+            // Sanity check inside the container
+            sh """
+                docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                ${DOCKER_COMPOSE} sh -lc 'pwd; ls -l'
+            """
+
+            sh """
+                docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} pull
+            """
+
+            sh """
+                docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} up -d
+            """
+
+            sh """
+                docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} ps
+            """
+            }
+        }
         }
     }
 

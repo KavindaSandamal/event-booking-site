@@ -78,6 +78,13 @@ pipeline {
             }
         }
 
+        stage('Debug Workspace') {
+            steps {
+                echo '🔍 Checking workspace contents...'
+                sh 'ls -R $WORKSPACE | sed -n '"'1,300p'"''
+            }
+        }
+
         stage('Deploy Locally') {
             steps {
                 echo '🚀 Deploying to local environment...'

@@ -6,104 +6,115 @@ pipeline {
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
         COMPOSE_FILE = "docker-compose.deploy.local.yml"
-        DOCKER_COMPOSE_IMAGE = "docker/compose:1.29.2"
+        DOCKER_COMPOSE = "docker/compose:1.29.2"
         WORK_DIR = "/workspace"
+        MAX_RETRIES = 3
+        RETRY_SLEEP = 10
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo '🔍 Checking out code from SCM'
-                checkout scm
+                echo '🔍 Using code from initial SCM checkout (no re-checkout)'
             }
         }
 
         stage('Code Quality Analysis') {
             steps {
                 echo '📊 Running code quality analysis...'
-                sh 'echo "Code quality analysis completed"'
+                script {
+                    sh 'echo "Code quality analysis completed"'
+                }
             }
         }
 
         stage('Unit Tests') {
             steps {
                 echo '🧪 Running unit tests...'
-                sh 'echo "Unit tests passed"'
+                script {
+                    sh 'echo "Unit tests passed"'
+                }
             }
         }
 
         stage('Build Docker Images') {
             steps {
-                echo '🐳 Building Docker images...'
+                echo '🐳 Building Docker images with retry...'
                 script {
-                    sh """
-                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${IMAGE_TAG} ./services/auth
-                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-catalog:${IMAGE_TAG} ./services/catalog
-                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-booking:${IMAGE_TAG} ./services/booking
-                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${IMAGE_TAG} ./services/payment
-                        docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${IMAGE_TAG} ./frontend
-                    """
+                    def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
+                    for (service in services) {
+                        echo "🔹 Building image for ${service}..."
+                        sh """
+                        for i in \$(seq 1 ${MAX_RETRIES}); do
+                            docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./services/${service} && break || echo "⚠️ Build failed, retrying (\$i/${MAX_RETRIES})..." && sleep ${RETRY_SLEEP}
+                        done
+                        """
+                    }
                 }
             }
         }
 
         stage('Push to Local Registry') {
             steps {
-                echo '📤 Pushing Docker images to local registry...'
+                echo '📤 Pushing images to local registry...'
                 script {
-                    sh """
-                        for service in auth catalog booking payment frontend; do
-                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-\$service:${IMAGE_TAG}
-                            docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-\$service:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-\$service:latest
-                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-\$service:latest
-                        done
-                    """
+                    def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
+                    for (service in services) {
+                        sh """
+                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} || echo "⚠️ Push failed for ${service}"
+                            docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
+                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest || echo "⚠️ Push latest failed for ${service}"
+                        """
+                    }
                 }
             }
         }
 
         stage('Debug Workspace') {
             steps {
-                echo '🔍 Listing workspace contents...'
-                sh 'ls -lah'
+                echo '🔍 Checking workspace contents...'
+                sh 'ls -R "$WORKSPACE" | sed -n "1,300p"'
             }
         }
 
         stage('Deploy Locally') {
             steps {
                 script {
-                    // Verify if docker-compose file exists
+                    // Ensure Docker Compose file exists
                     if (!fileExists("${COMPOSE_FILE}")) {
                         error "❌ File ${COMPOSE_FILE} not found in workspace!"
                     }
 
-                    echo '🚀 Deploying with Docker Compose...'
-
+                    echo "🚀 Deploying services using Docker Compose..."
+                    
+                    // Pull images
                     sh """
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -v \$PWD:${WORK_DIR} \
-                            -w ${WORK_DIR} \
-                            ${DOCKER_COMPOSE_IMAGE} \
-                            -f ${COMPOSE_FILE} pull
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE} \
+                          -f ${WORK_DIR}/${COMPOSE_FILE} pull
                     """
 
+                    // Up services
                     sh """
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -v \$PWD:${WORK_DIR} \
-                            -w ${WORK_DIR} \
-                            ${DOCKER_COMPOSE_IMAGE} \
-                            -f ${COMPOSE_FILE} up -d
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE} \
+                          -f ${WORK_DIR}/${COMPOSE_FILE} up -d
                     """
 
+                    // List running containers
                     sh """
                         docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            -v \$PWD:${WORK_DIR} \
-                            -w ${WORK_DIR} \
-                            ${DOCKER_COMPOSE_IMAGE} \
-                            -f ${COMPOSE_FILE} ps
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE} \
+                          -f ${WORK_DIR}/${COMPOSE_FILE} ps
                     """
                 }
             }

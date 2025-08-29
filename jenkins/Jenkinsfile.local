@@ -104,15 +104,16 @@ pipeline {
 
                     echo "🚀 Deploying services using Docker Compose..."
                     
-                    // The core fix: Get the absolute path of the workspace using pwd()
-                    // and explicitly pass it to the docker run command to ensure the file is found.
                     def workspaceAbsPath = pwd()
+                    // Get the current user's UID to pass to the container
+                    def jenkinsUserUid = sh(returnStdout: true, script: 'id -u').trim()
 
                     sh """
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
                           -v ${workspaceAbsPath}:${WORK_DIR} \
                           -w ${WORK_DIR} \
+                          --user ${jenkinsUserUid} \
                           ${DOCKER_COMPOSE_IMAGE} \
                           docker compose -f ${COMPOSE_FILE} pull
                     """
@@ -122,6 +123,7 @@ pipeline {
                           -v /var/run/docker.sock:/var/run/docker.sock \
                           -v ${workspaceAbsPath}:${WORK_DIR} \
                           -w ${WORK_DIR} \
+                          --user ${jenkinsUserUid} \
                           ${DOCKER_COMPOSE_IMAGE} \
                           docker compose -f ${COMPOSE_FILE} up -d
                     """
@@ -131,6 +133,7 @@ pipeline {
                           -v /var/run/docker.sock:/var/run/docker.sock \
                           -v ${workspaceAbsPath}:${WORK_DIR} \
                           -w ${WORK_DIR} \
+                          --user ${jenkinsUserUid} \
                           ${DOCKER_COMPOSE_IMAGE} \
                           docker compose -f ${COMPOSE_FILE} ps
                     """

@@ -45,9 +45,13 @@ pipeline {
                     for (service in services) {
                         echo "🔹 Building image for ${service}..."
                         def buildSucceeded = false
-                        for (i in 1..MAX_RETRIES) {
+                        // The loop was fixed here.
+                        // Using a standard for loop avoids the non-serializable Groovy ObjectRange error.
+                        for (int i = 1; i <= MAX_RETRIES; i++) {
                             try {
-                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./services/${service} || docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./frontend"
+                                // Dynamically set the build path for each service
+                                def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
+                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}"
                                 buildSucceeded = true
                                 break
                             } catch (err) {
@@ -57,6 +61,8 @@ pipeline {
                         }
                         if (!buildSucceeded) {
                             echo "❌ Build failed for ${service} after ${MAX_RETRIES} retries. Skipping push."
+                            // fail the build if this stage fails completely
+                            error "Failed to build image for ${service}."
                         }
                     }
                 }
@@ -73,9 +79,9 @@ pipeline {
                         if (sh(script: "docker image inspect ${imageName} > /dev/null 2>&1", returnStatus: true) == 0) {
                             echo "🚀 Pushing ${imageName}..."
                             sh """
-                                docker push ${imageName} || echo "⚠️ Push failed for ${service}"
+                                docker push ${imageName}
                                 docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                                docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest || echo "⚠️ Push latest failed for ${service}"
+                                docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
                             """
                         } else {
                             echo "⚠️ Image ${imageName} does not exist. Skipping push."

@@ -44,11 +44,20 @@ pipeline {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         echo "🔹 Building image for ${service}..."
-                        sh """
-                        for i in \$(seq 1 ${MAX_RETRIES}); do
-                            docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./services/${service} && break || echo "⚠️ Build failed, retrying (\$i/${MAX_RETRIES})..." && sleep ${RETRY_SLEEP}
-                        done
-                        """
+                        def buildSucceeded = false
+                        for (i in 1..MAX_RETRIES) {
+                            try {
+                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./services/${service} || docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ./frontend"
+                                buildSucceeded = true
+                                break
+                            } catch (err) {
+                                echo "⚠️ Build failed for ${service}, retry ${i}/${MAX_RETRIES}..."
+                                sleep RETRY_SLEEP
+                            }
+                        }
+                        if (!buildSucceeded) {
+                            echo "❌ Build failed for ${service} after ${MAX_RETRIES} retries. Skipping push."
+                        }
                     }
                 }
             }
@@ -56,15 +65,21 @@ pipeline {
 
         stage('Push to Local Registry') {
             steps {
-                echo '📤 Pushing images to local registry...'
+                echo '📤 Pushing images to local registry with checks...'
                 script {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
-                        sh """
-                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} || echo "⚠️ Push failed for ${service}"
-                            docker tag ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                            docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest || echo "⚠️ Push latest failed for ${service}"
-                        """
+                        def imageName = "${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG}"
+                        if (sh(script: "docker image inspect ${imageName} > /dev/null 2>&1", returnStatus: true) == 0) {
+                            echo "🚀 Pushing ${imageName}..."
+                            sh """
+                                docker push ${imageName} || echo "⚠️ Push failed for ${service}"
+                                docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
+                                docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest || echo "⚠️ Push latest failed for ${service}"
+                            """
+                        } else {
+                            echo "⚠️ Image ${imageName} does not exist. Skipping push."
+                        }
                     }
                 }
             }
@@ -80,14 +95,11 @@ pipeline {
         stage('Deploy Locally') {
             steps {
                 script {
-                    // Ensure Docker Compose file exists
                     if (!fileExists("${COMPOSE_FILE}")) {
                         error "❌ File ${COMPOSE_FILE} not found in workspace!"
                     }
 
                     echo "🚀 Deploying services using Docker Compose..."
-                    
-                    // Pull images
                     sh """
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
@@ -97,7 +109,6 @@ pipeline {
                           -f ${WORK_DIR}/${COMPOSE_FILE} pull
                     """
 
-                    // Up services
                     sh """
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \
@@ -107,7 +118,6 @@ pipeline {
                           -f ${WORK_DIR}/${COMPOSE_FILE} up -d
                     """
 
-                    // List running containers
                     sh """
                         docker run --rm \
                           -v /var/run/docker.sock:/var/run/docker.sock \

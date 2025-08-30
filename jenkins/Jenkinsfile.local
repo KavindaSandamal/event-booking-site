@@ -1,25 +1,24 @@
 pipeline {
     agent any
-
+    
     environment {
         DOCKER_REGISTRY = 'localhost:5000'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
-        COMPOSE_FILE = "docker-compose.deploy.local.yml"
+        COMPOSE_FILE = "dc.yml"
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        // Use a modern Docker image with the built-in compose plugin
         DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli'
     }
-
+    
     stages {
         stage('Checkout') {
             steps {
                 echo '🔍 Using code from initial SCM checkout (no re-checkout)'
             }
         }
-
+        
         stage('Code Quality Analysis') {
             steps {
                 echo '📊 Running code quality analysis...'
@@ -28,7 +27,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Unit Tests') {
             steps {
                 echo '🧪 Running unit tests...'
@@ -37,7 +36,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Build Docker Images') {
             steps {
                 echo '🐳 Building Docker images with retry...'
@@ -65,7 +64,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Push to Local Registry') {
             steps {
                 echo '📤 Pushing images to local registry with checks...'
@@ -87,56 +86,54 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Debug Workspace') {
             steps {
                 echo '🔍 Checking workspace contents...'
-                sh 'ls -R "$WORKSPACE" | sed -n "1,300p"'
+                sh 'ls -R "$WORKSPACE" | head -300'
             }
         }
-
+        
         stage('Deploy Locally') {
             steps {
                 script {
                     if (!fileExists("${COMPOSE_FILE}")) {
                         error "❌ File ${COMPOSE_FILE} not found in workspace!"
                     }
-
-                    echo '🚀 Deploying services using Docker Compose...'
                     
-                    def workspaceAbsPath = pwd()
-
+                    echo "🚀 Deploying services using Docker Compose..."
+                    
                     sh """
                         docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v ${workspaceAbsPath}:${WORK_DIR} \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
-                        docker compose -f ${COMPOSE_FILE} pull
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE_IMAGE} \
+                          docker compose -f ${COMPOSE_FILE} pull
                     """
-
+                    
                     sh """
                         docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v ${workspaceAbsPath}:${WORK_DIR} \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
-                        docker compose -f ${COMPOSE_FILE} up -d
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE_IMAGE} \
+                          docker compose -f ${COMPOSE_FILE} up -d
                     """
-
+                    
                     sh """
                         docker run --rm \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v ${workspaceAbsPath}:${WORK_DIR} \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
-                        docker compose -f ${COMPOSE_FILE} ps
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          -v \$WORKSPACE:${WORK_DIR} \
+                          -w ${WORK_DIR} \
+                          ${DOCKER_COMPOSE_IMAGE} \
+                          docker compose -f ${COMPOSE_FILE} ps
                     """
                 }
             }
         }
     }
-
+    
     post {
         always {
             echo '🎉 Pipeline completed!'

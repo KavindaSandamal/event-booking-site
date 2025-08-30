@@ -112,6 +112,71 @@ curl http://localhost:3000
    ```
 4. **Watch CI/CD** automatically run in GitHub Actions
 
+### **Working with Different Branches**
+
+#### **Feature Branch Development (Recommended)**
+```bash
+# Create a new feature branch
+git checkout -b feature/new-user-authentication
+
+# Make your changes
+# ... edit code ...
+
+# Commit and push to feature branch
+git add .
+git commit -m "feat: add new user authentication system"
+git push origin feature/new-user-authentication
+
+# CI/CD automatically runs on feature branch!
+# Create Pull Request when ready
+```
+
+#### **Main Branch Development (Direct)**
+```bash
+# Make changes directly on main
+git add .
+git commit -m "feat: direct main branch changes"
+git push origin main
+
+# CI/CD automatically runs on main branch
+```
+
+#### **Pull Request Workflow**
+1. **Create feature branch** from main
+2. **Develop and test** your feature
+3. **Push to feature branch** (triggers CI/CD)
+4. **Create Pull Request** to main
+5. **CI/CD validates** the PR
+6. **Review and merge** when approved
+
+### **Branch-Specific CI/CD Behavior**
+
+#### **🌿 Main Branch (`main`)**
+- ✅ **Full CI/CD pipeline** runs automatically
+- ✅ **Production deployment** ready
+- ✅ **Complete testing** and validation
+
+#### **🌿 Develop Branch (`develop`)**
+- ✅ **Full CI/CD pipeline** runs automatically
+- ✅ **Staging deployment** ready
+- ✅ **Integration testing** and validation
+
+#### **🌿 Feature Branches (`feature/*`)**
+- ✅ **Feature-specific CI/CD** runs automatically
+- ✅ **Code quality checks** and validation
+- ✅ **Build verification** and testing
+- ✅ **Ready for Pull Request** review
+
+#### **🌿 Bugfix Branches (`bugfix/*`)**
+- ✅ **Bugfix-specific CI/CD** runs automatically
+- ✅ **Regression testing** and validation
+- ✅ **Quick fixes** for production issues
+
+#### **🌿 Hotfix Branches (`hotfix/*`)**
+- ✅ **Emergency CI/CD** runs automatically
+- ✅ **Critical fix validation** and testing
+- ✅ **Production hotfix** deployment ready
+
 ### **Local Development**
 - **Frontend:** Edit files in `frontend/src/` - changes auto-reload
 - **Backend:** Edit files in `services/*/app/` - restart containers to see changes

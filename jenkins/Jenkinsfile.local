@@ -44,13 +44,11 @@ pipeline {
                         def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
                         
                         retry(MAX_RETRIES) {
-                            // The `--group-add docker` flag grants access to the Docker socket from inside the container
+                            // Removing the --user flag to run as root and bypass socket permissions
                             sh """
                                 docker run --rm \
-                                -u \$(id -u):\$(id -g) \
                                 -v /var/run/docker.sock:/var/run/docker.sock \
                                 -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
-                                --group-add docker \
                                 $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
                             """
                         }
@@ -69,25 +67,19 @@ pipeline {
                         
                         sh """
                             docker run --rm \
-                            -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            --group-add docker \
                             $DOCKER_IMAGE push ${imageName}
                         """
 
                         sh """
                             docker run --rm \
-                            -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            --group-add docker \
                             $DOCKER_IMAGE tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
                         """
 
                         sh """
                             docker run --rm \
-                            -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            --group-add docker \
                             $DOCKER_IMAGE push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
                         """
                     }
@@ -105,15 +97,12 @@ pipeline {
                     echo '🚀 Deploying services using Docker Compose...'
                     
                     def workspaceAbsPath = pwd()
-                    def jenkinsUserUid = sh(returnStdout: true, script: 'id -u').trim()
 
                     sh """
                         docker run --rm \
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v ${workspaceAbsPath}:${WORK_DIR} \
                         -w ${WORK_DIR} \
-                        --user ${jenkinsUserUid} \
-                        --group-add docker \
                         ${DOCKER_COMPOSE_IMAGE} \
                         docker compose -f ${COMPOSE_FILE} pull
                     """
@@ -123,8 +112,6 @@ pipeline {
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v ${workspaceAbsPath}:${WORK_DIR} \
                         -w ${WORK_DIR} \
-                        --user ${jenkinsUserUid} \
-                        --group-add docker \
                         ${DOCKER_COMPOSE_IMAGE} \
                         docker compose -f ${COMPOSE_FILE} up -d
                     """
@@ -134,8 +121,6 @@ pipeline {
                         -v /var/run/docker.sock:/var/run/docker.sock \
                         -v ${workspaceAbsPath}:${WORK_DIR} \
                         -w ${WORK_DIR} \
-                        --user ${jenkinsUserUid} \
-                        --group-add docker \
                         ${DOCKER_COMPOSE_IMAGE} \
                         docker compose -f ${COMPOSE_FILE} ps
                     """

@@ -9,7 +9,7 @@ pipeline {
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_IMAGE = "docker:24.0.5" // Use official Docker CLI image
+        DOCKER_IMAGE = "docker:24.0.5" // Docker CLI container
     }
 
     stages {
@@ -46,6 +46,7 @@ pipeline {
                                 def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
                                 sh """
                                     docker run --rm \
+                                    -u \$(id -u):\$(id -g) \
                                     -v /var/run/docker.sock:/var/run/docker.sock \
                                     -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
                                     $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
@@ -74,12 +75,14 @@ pipeline {
                         def imageName = "${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG}"
                         sh """
                             docker run --rm \
+                            -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             $DOCKER_IMAGE sh -c "docker image inspect ${imageName} > /dev/null 2>&1 || exit 1"
                         """
                         echo "🚀 Pushing ${imageName}..."
                         sh """
                             docker run --rm \
+                            -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
                             $DOCKER_IMAGE sh -c "docker push ${imageName} && docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest && docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest"
                         """
@@ -106,22 +109,25 @@ pipeline {
 
                     sh """
                         docker run --rm \
+                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
                         $DOCKER_IMAGE compose -f ${COMPOSE_FILE} pull
                     """
 
                     sh """
                         docker run --rm \
+                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
                         $DOCKER_IMAGE compose -f ${COMPOSE_FILE} up -d
                     """
 
                     sh """
                         docker run --rm \
+                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
                         $DOCKER_IMAGE compose -f ${COMPOSE_FILE} ps
                     """
                 }

@@ -1,4 +1,8 @@
-# Event Ticket Booking Platform
+# Event Booking Platform - CI/CD Test Update
+
+<!-- Jenkins Pipeline Test - This change should trigger automatic build -->
+
+# Event Booking Platform
 
 A microservices-based event ticket booking platform built with FastAPI, React, and modern cloud technologies.
 

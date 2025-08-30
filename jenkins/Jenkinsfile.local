@@ -5,11 +5,11 @@ pipeline {
         DOCKER_REGISTRY = 'localhost:5000'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
-        COMPOSE_FILE = "dc.yml"
+        COMPOSE_FILE = "docker-compose.deploy.local.yml"
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_IMAGE = 'docker:24.0.5'
+        // Use a modern Docker image with the built-in compose plugin
         DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli'
     }
 
@@ -23,14 +23,18 @@ pipeline {
         stage('Code Quality Analysis') {
             steps {
                 echo '📊 Running code quality analysis...'
-                sh 'echo "Code quality analysis completed"'
+                script {
+                    sh 'echo "Code quality analysis completed"'
+                }
             }
         }
 
         stage('Unit Tests') {
             steps {
                 echo '🧪 Running unit tests...'
-                sh 'echo "Unit tests passed"'
+                script {
+                    sh 'echo "Unit tests passed"'
+                }
             }
         }
 
@@ -41,15 +45,21 @@ pipeline {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         echo "🔹 Building image for ${service}..."
-                        def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
-                        
-                        retry(MAX_RETRIES) {
-                            sh """
-                                docker run --rm \
-                                -v /var/run/docker.sock:/var/run/docker.sock \
-                                -v \$WORKSPACE:\$WORK_DIR -w \$WORK_DIR \
-                                $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
-                            """
+                        def buildSucceeded = false
+                        for (int i = 1; i <= MAX_RETRIES; i++) {
+                            try {
+                                def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
+                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}"
+                                buildSucceeded = true
+                                break
+                            } catch (err) {
+                                echo "⚠️ Build failed for ${service}, retry ${i}/${MAX_RETRIES}..."
+                                sleep RETRY_SLEEP
+                            }
+                        }
+                        if (!buildSucceeded) {
+                            echo "❌ Build failed for ${service} after ${MAX_RETRIES} retries. Skipping push."
+                            error "Failed to build image for ${service}."
                         }
                     }
                 }
@@ -63,26 +73,25 @@ pipeline {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         def imageName = "${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG}"
-                        
-                        sh """
-                            docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            $DOCKER_IMAGE push ${imageName}
-                        """
-
-                        sh """
-                            docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            $DOCKER_IMAGE tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                        """
-
-                        sh """
-                            docker run --rm \
-                            -v /var/run/docker.sock:/var/run/docker.sock \
-                            $DOCKER_IMAGE push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                        """
+                        if (sh(script: "docker image inspect ${imageName} > /dev/null 2>&1", returnStatus: true) == 0) {
+                            echo "🚀 Pushing ${imageName}..."
+                            sh """
+                                docker push ${imageName}
+                                docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
+                                docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
+                            """
+                        } else {
+                            echo "⚠️ Image ${imageName} does not exist. Skipping push."
+                        }
                     }
                 }
+            }
+        }
+
+        stage('Debug Workspace') {
+            steps {
+                echo '🔍 Checking workspace contents...'
+                sh 'ls -R "$WORKSPACE" | sed -n "1,300p"'
             }
         }
 

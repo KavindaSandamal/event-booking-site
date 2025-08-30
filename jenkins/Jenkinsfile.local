@@ -5,11 +5,9 @@ pipeline {
         DOCKER_REGISTRY = 'localhost:5000'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
-        COMPOSE_FILE = "dc.yml"
-        WORK_DIR = "/workspace"
+        COMPOSE_FILE = "docker-compose.local.yml"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli'
     }
     
     stages {
@@ -110,32 +108,17 @@ pipeline {
 
                     echo "🚀 Deploying services using Docker Compose..."
 
+                    // Deploy specific services that we built
                     sh """
-                        docker run --rm \
-                        -v ${WORKSPACE}:${WORK_DIR} \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
-                        docker compose -f ${COMPOSE_FILE} pull
+                        docker compose -f ${COMPOSE_FILE} up -d auth catalog booking payment frontend
                     """
 
+                    // Check service status
                     sh """
-                        docker run --rm \
-                        -v ${WORKSPACE}:${WORK_DIR} \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
-                        docker compose -f ${COMPOSE_FILE} up -d
-                    """
-
-                    sh """
-                        docker run --rm \
-                        -v ${WORKSPACE}:${WORK_DIR} \
-                        -v /var/run/docker.sock:/var/run/docker.sock \
-                        -w ${WORK_DIR} \
-                        ${DOCKER_COMPOSE_IMAGE} \
                         docker compose -f ${COMPOSE_FILE} ps
                     """
+
+                    echo "✅ Services deployed successfully!"
                 }
             }
         }

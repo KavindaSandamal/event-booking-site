@@ -9,8 +9,8 @@ pipeline {
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_IMAGE = 'docker:24.0.5' // Main Docker CLI image for build/push
-        DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli' // Specific image for Docker Compose
+        DOCKER_IMAGE = 'docker:24.0.5'
+        DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli'
     }
 
     stages {
@@ -44,11 +44,10 @@ pipeline {
                         def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
                         
                         retry(MAX_RETRIES) {
-                            // Removing the --user flag to run as root and bypass socket permissions
                             sh """
                                 docker run --rm \
                                 -v /var/run/docker.sock:/var/run/docker.sock \
-                                -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
+                                -v \$WORKSPACE:\$WORK_DIR -w \$WORK_DIR \
                                 $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
                             """
                         }

@@ -108,14 +108,14 @@ pipeline {
 
                     echo "🚀 Deploying services using Docker Compose..."
 
-                    // Deploy specific services that we built
+                    // Deploy specific services that we built with a unique project name
                     sh """
-                        docker compose -f ${COMPOSE_FILE} up -d auth catalog booking payment frontend
+                        docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline up -d auth catalog booking payment frontend
                     """
 
                     // Check service status
                     sh """
-                        docker compose -f ${COMPOSE_FILE} ps
+                        docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline ps
                     """
 
                     echo "✅ Services deployed successfully!"
@@ -130,9 +130,17 @@ pipeline {
         }
         success {
             echo '✅ Pipeline succeeded!'
+            // Clean up Jenkins pipeline containers to avoid conflicts
+            sh """
+                docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline down --remove-orphans || true
+            """
         }
         failure {
             echo '❌ Pipeline failed!'
+            // Clean up Jenkins pipeline containers even on failure
+            sh """
+                docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline down --remove-orphans || true
+            """
         }
     }
 }

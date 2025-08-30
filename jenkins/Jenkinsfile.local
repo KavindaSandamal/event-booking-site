@@ -41,6 +41,10 @@ pipeline {
             steps {
                 echo '🐳 Building Docker images with retry...'
                 script {
+                    // First, ensure we can access Docker
+                    sh 'docker version'
+                    sh 'docker info'
+                    
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         echo "🔹 Building image for ${service}..."
@@ -48,11 +52,14 @@ pipeline {
                         for (int i = 1; i <= MAX_RETRIES; i++) {
                             try {
                                 def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
-                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}"
+                                echo "Building from path: ${buildPath}"
+                                sh "docker build --no-cache -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}"
                                 buildSucceeded = true
+                                echo "✅ Successfully built ${service}"
                                 break
                             } catch (err) {
                                 echo "⚠️ Build failed for ${service}, retry ${i}/${MAX_RETRIES}..."
+                                echo "Error: ${err.message}"
                                 sleep RETRY_SLEEP
                             }
                         }

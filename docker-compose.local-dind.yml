@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  # ===== CI/CD TOOLS WITH DOCKER-IN-DOCKER =====
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    ports:
+      - "8081:8080"
+      - "50000:50000"
+    environment:
+      - JENKINS_OPTS=--httpPort=8080
+    volumes:
+      - jenkins_data:/var/jenkins_home
+    networks:
+      - event-network
+    restart: unless-stopped
+
+  # Docker daemon for Jenkins
+  docker-daemon:
+    image: docker:dind
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=""
+    volumes:
+      - docker_data:/var/lib/docker
+    networks:
+      - event-network
+    restart: unless-stopped
+
+volumes:
+  jenkins_data:
+  docker_data:
+
+networks:
+  event-network:
+    driver: bridge

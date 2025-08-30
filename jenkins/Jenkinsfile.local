@@ -100,34 +100,34 @@ pipeline {
                     if (!fileExists("${COMPOSE_FILE}")) {
                         error "❌ File ${COMPOSE_FILE} not found in workspace!"
                     }
-                    
+
                     echo "🚀 Deploying services using Docker Compose..."
-                    
+
                     sh """
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} pull
+                        -v ${WORKSPACE}:${WORK_DIR} \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -w ${WORK_DIR} \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} pull
                     """
-                    
+
                     sh """
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} up -d
+                        -v ${WORKSPACE}:${WORK_DIR} \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -w ${WORK_DIR} \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} up -d
                     """
-                    
+
                     sh """
                         docker run --rm \
-                          -v /var/run/docker.sock:/var/run/docker.sock \
-                          -v \$WORKSPACE:${WORK_DIR} \
-                          -w ${WORK_DIR} \
-                          ${DOCKER_COMPOSE_IMAGE} \
-                          docker compose -f ${COMPOSE_FILE} ps
+                        -v ${WORKSPACE}:${WORK_DIR} \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -w ${WORK_DIR} \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} ps
                     """
                 }
             }

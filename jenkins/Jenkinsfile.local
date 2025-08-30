@@ -1,16 +1,15 @@
 pipeline {
     agent any
 
-environment {
+    environment {
         DOCKER_REGISTRY = 'localhost:5000'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
-        // Change the file name here
         COMPOSE_FILE = "dc.yml"
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_COMPOSE = "docker/compose:1.29.2"
+        DOCKER_IMAGE = "docker:24.0.5" // Use official Docker CLI image
     }
 
     stages {
@@ -23,18 +22,14 @@ environment {
         stage('Code Quality Analysis') {
             steps {
                 echo '📊 Running code quality analysis...'
-                script {
-                    sh 'echo "Code quality analysis completed"'
-                }
+                sh 'echo "Code quality analysis completed"'
             }
         }
 
         stage('Unit Tests') {
             steps {
                 echo '🧪 Running unit tests...'
-                script {
-                    sh 'echo "Unit tests passed"'
-                }
+                sh 'echo "Unit tests passed"'
             }
         }
 
@@ -49,7 +44,12 @@ environment {
                         for (int i = 1; i <= MAX_RETRIES; i++) {
                             try {
                                 def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
-                                sh "docker build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}"
+                                sh """
+                                    docker run --rm \
+                                    -v /var/run/docker.sock:/var/run/docker.sock \
+                                    -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
+                                    $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
+                                """
                                 buildSucceeded = true
                                 break
                             } catch (err) {
@@ -58,8 +58,7 @@ environment {
                             }
                         }
                         if (!buildSucceeded) {
-                            echo "❌ Build failed for ${service} after ${MAX_RETRIES} retries. Skipping push."
-                            error "Failed to build image for ${service}."
+                            error "❌ Failed to build image for ${service} after ${MAX_RETRIES} retries."
                         }
                     }
                 }
@@ -73,16 +72,17 @@ environment {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         def imageName = "${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG}"
-                        if (sh(script: "docker image inspect ${imageName} > /dev/null 2>&1", returnStatus: true) == 0) {
-                            echo "🚀 Pushing ${imageName}..."
-                            sh """
-                                docker push ${imageName}
-                                docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                                docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
-                            """
-                        } else {
-                            echo "⚠️ Image ${imageName} does not exist. Skipping push."
-                        }
+                        sh """
+                            docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            $DOCKER_IMAGE sh -c "docker image inspect ${imageName} > /dev/null 2>&1 || exit 1"
+                        """
+                        echo "🚀 Pushing ${imageName}..."
+                        sh """
+                            docker run --rm \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            $DOCKER_IMAGE sh -c "docker push ${imageName} && docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest && docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest"
+                        """
                     }
                 }
             }
@@ -96,42 +96,36 @@ environment {
         }
 
         stage('Deploy Locally') {
-        steps {
-            script {
-            if (!fileExists("${COMPOSE_FILE}")) {
-                error "❌ File ${COMPOSE_FILE} not found in workspace!"
+            steps {
+                script {
+                    if (!fileExists("${COMPOSE_FILE}")) {
+                        error "❌ File ${COMPOSE_FILE} not found in workspace!"
+                    }
+
+                    echo '🚀 Deploying services using Docker Compose...'
+
+                    sh """
+                        docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} pull
+                    """
+
+                    sh """
+                        docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} up -d
+                    """
+
+                    sh """
+                        docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
+                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} ps
+                    """
+                }
             }
-
-            // Sanity check inside the container
-            sh """
-                docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
-                ${DOCKER_COMPOSE} sh -lc 'pwd; ls -l'
-            """
-
-            sh """
-                docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
-                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} pull
-            """
-
-            sh """
-                docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
-                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} up -d
-            """
-
-            sh """
-                docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE:${WORK_DIR} -w ${WORK_DIR} \
-                ${DOCKER_COMPOSE} -f ${COMPOSE_FILE} ps
-            """
-            }
-        }
         }
     }
 

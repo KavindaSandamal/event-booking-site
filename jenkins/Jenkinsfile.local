@@ -9,7 +9,8 @@ pipeline {
         WORK_DIR = "/workspace"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
-        DOCKER_IMAGE = "docker:24.0.5" // Docker CLI container
+        DOCKER_IMAGE = 'docker:24.0.5' // Main Docker CLI image for build/push
+        DOCKER_COMPOSE_IMAGE = 'docker:24.0.5-cli' // Specific image for Docker Compose
     }
 
     stages {
@@ -40,26 +41,18 @@ pipeline {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         echo "🔹 Building image for ${service}..."
-                        def buildSucceeded = false
-                        for (int i = 1; i <= MAX_RETRIES; i++) {
-                            try {
-                                def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
-                                sh """
-                                    docker run --rm \
-                                    -u \$(id -u):\$(id -g) \
-                                    -v /var/run/docker.sock:/var/run/docker.sock \
-                                    -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
-                                    $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
-                                """
-                                buildSucceeded = true
-                                break
-                            } catch (err) {
-                                echo "⚠️ Build failed for ${service}, retry ${i}/${MAX_RETRIES}..."
-                                sleep RETRY_SLEEP
-                            }
-                        }
-                        if (!buildSucceeded) {
-                            error "❌ Failed to build image for ${service} after ${MAX_RETRIES} retries."
+                        def buildPath = (service == 'frontend') ? './frontend' : "./services/${service}"
+                        
+                        retry(MAX_RETRIES) {
+                            // The `--group-add docker` flag grants access to the Docker socket from inside the container
+                            sh """
+                                docker run --rm \
+                                -u \$(id -u):\$(id -g) \
+                                -v /var/run/docker.sock:/var/run/docker.sock \
+                                -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
+                                --group-add docker \
+                                $DOCKER_IMAGE build -t ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG} ${buildPath}
+                            """
                         }
                     }
                 }
@@ -73,28 +66,32 @@ pipeline {
                     def services = ['auth', 'catalog', 'booking', 'payment', 'frontend']
                     for (service in services) {
                         def imageName = "${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:${IMAGE_TAG}"
+                        
                         sh """
                             docker run --rm \
                             -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            $DOCKER_IMAGE sh -c "docker image inspect ${imageName} > /dev/null 2>&1 || exit 1"
+                            --group-add docker \
+                            $DOCKER_IMAGE push ${imageName}
                         """
-                        echo "🚀 Pushing ${imageName}..."
+
                         sh """
                             docker run --rm \
                             -u \$(id -u):\$(id -g) \
                             -v /var/run/docker.sock:/var/run/docker.sock \
-                            $DOCKER_IMAGE sh -c "docker push ${imageName} && docker tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest && docker push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest"
+                            --group-add docker \
+                            $DOCKER_IMAGE tag ${imageName} ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
+                        """
+
+                        sh """
+                            docker run --rm \
+                            -u \$(id -u):\$(id -g) \
+                            -v /var/run/docker.sock:/var/run/docker.sock \
+                            --group-add docker \
+                            $DOCKER_IMAGE push ${DOCKER_REGISTRY}/${PROJECT_NAME}-${service}:latest
                         """
                     }
                 }
-            }
-        }
-
-        stage('Debug Workspace') {
-            steps {
-                echo '🔍 Checking workspace contents...'
-                sh 'ls -R "$WORKSPACE" | sed -n "1,300p"'
             }
         }
 
@@ -106,29 +103,41 @@ pipeline {
                     }
 
                     echo '🚀 Deploying services using Docker Compose...'
+                    
+                    def workspaceAbsPath = pwd()
+                    def jenkinsUserUid = sh(returnStdout: true, script: 'id -u').trim()
 
                     sh """
                         docker run --rm \
-                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
-                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} pull
+                        -v ${workspaceAbsPath}:${WORK_DIR} \
+                        -w ${WORK_DIR} \
+                        --user ${jenkinsUserUid} \
+                        --group-add docker \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} pull
                     """
 
                     sh """
                         docker run --rm \
-                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
-                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} up -d
+                        -v ${workspaceAbsPath}:${WORK_DIR} \
+                        -w ${WORK_DIR} \
+                        --user ${jenkinsUserUid} \
+                        --group-add docker \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} up -d
                     """
 
                     sh """
                         docker run --rm \
-                        -u \$(id -u):\$(id -g) \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v $WORKSPACE:$WORK_DIR -w $WORK_DIR \
-                        $DOCKER_IMAGE compose -f ${COMPOSE_FILE} ps
+                        -v ${workspaceAbsPath}:${WORK_DIR} \
+                        -w ${WORK_DIR} \
+                        --user ${jenkinsUserUid} \
+                        --group-add docker \
+                        ${DOCKER_COMPOSE_IMAGE} \
+                        docker compose -f ${COMPOSE_FILE} ps
                     """
                 }
             }

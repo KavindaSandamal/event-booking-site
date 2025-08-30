@@ -5,7 +5,7 @@ pipeline {
         DOCKER_REGISTRY = 'localhost:5000'
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         PROJECT_NAME = 'event-booking-platform'
-        COMPOSE_FILE = "docker-compose.local.yml"
+        COMPOSE_FILE = "jenkins/docker-compose.jenkins.yml"
         MAX_RETRIES = 3
         RETRY_SLEEP = 10
     }
@@ -108,14 +108,14 @@ pipeline {
 
                     echo "🚀 Deploying services using Docker Compose..."
 
-                    // Deploy specific services that we built with a unique project name
+                    // Deploy specific services that we built
                     sh """
-                        docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline up -d auth catalog booking payment frontend
+                        docker compose -f ${COMPOSE_FILE} up -d
                     """
 
                     // Check service status
                     sh """
-                        docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline ps
+                        docker compose -f ${COMPOSE_FILE} ps
                     """
 
                     echo "✅ Services deployed successfully!"
@@ -132,14 +132,14 @@ pipeline {
             echo '✅ Pipeline succeeded!'
             // Clean up Jenkins pipeline containers to avoid conflicts
             sh """
-                docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline down --remove-orphans || true
+                docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
             """
         }
         failure {
             echo '❌ Pipeline failed!'
             // Clean up Jenkins pipeline containers even on failure
             sh """
-                docker compose -f ${COMPOSE_FILE} -p jenkins-pipeline down --remove-orphans || true
+                docker compose -f ${COMPOSE_FILE} down --remove-orphans || true
             """
         }
     }

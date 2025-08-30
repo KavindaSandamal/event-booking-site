@@ -1,0 +1,61 @@
+services:
+  auth:
+    image: localhost:5000/event-booking-platform-auth:latest
+    container_name: jenkins-pipeline-auth
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/event_booking
+      - REDIS_URL=redis://host.docker.internal:6379
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672
+    ports:
+      - "8001:8000"
+    networks:
+      - jenkins-network
+
+  catalog:
+    image: localhost:5000/event-booking-platform-catalog:latest
+    container_name: jenkins-pipeline-catalog
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/event_booking
+      - REDIS_URL=redis://host.docker.internal:6379
+      - KAFKA_BROKERS=host.docker.internal:9092
+    ports:
+      - "8002:8000"
+    networks:
+      - jenkins-network
+
+  booking:
+    image: localhost:5000/event-booking-platform-booking:latest
+    container_name: jenkins-pipeline-booking
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/event_booking
+      - REDIS_URL=redis://host.docker.internal:6379
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672
+      - KAFKA_BROKERS=host.docker.internal:9092
+    ports:
+      - "8003:8000"
+    networks:
+      - jenkins-network
+
+  payment:
+    image: localhost:5000/event-booking-platform-payment:latest
+    container_name: jenkins-pipeline-payment
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/event_booking
+      - REDIS_URL=redis://host.docker.internal:6379
+      - RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672
+    ports:
+      - "8004:8000"
+    networks:
+      - jenkins-network
+
+  frontend:
+    image: localhost:5000/event-booking-platform-frontend:latest
+    container_name: jenkins-pipeline-frontend
+    ports:
+      - "3001:3000"
+    networks:
+      - jenkins-network
+
+networks:
+  jenkins-network:
+    driver: bridge

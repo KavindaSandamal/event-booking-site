@@ -32,6 +32,10 @@ app.add_middleware(
 def startup():
     Base.metadata.create_all(bind=engine)
 
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "auth"}
+
 def get_db():
     db = SessionLocal()
     try:

@@ -84,7 +84,7 @@ services:
       - DATABASE_URL=postgresql://postgres:password@postgres-primary:5432/event_booking
       - REDIS_URL=redis://redis-cluster:6379
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_SECRET=event-booking-platform-jwt-secret-key-2025-production-ready
       - JWT_ALGORITHM=HS256
       - JWT_EXPIRES_IN=3600
     networks:
@@ -128,6 +128,8 @@ services:
       - REDIS_URL=redis://redis-cluster:6379
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - KAFKA_BROKERS=kafka:9092
+      - AUTH_URL=http://auth:8000
+      - CATALOG_URL=http://catalog:8000
     networks:
       - cloud-network
     depends_on:
@@ -150,6 +152,8 @@ services:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - STRIPE_SECRET_KEY=sk_test_your_stripe_key_here
       - STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_key_here
+      - AUTH_URL=http://auth:8000
+      - CATALOG_URL=http://catalog:8000
     networks:
       - cloud-network
     depends_on:

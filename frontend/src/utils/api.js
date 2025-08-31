@@ -2,9 +2,9 @@ import axios from 'axios';
 import { store } from '../store';
 import { logout, refreshToken, selectToken, selectRefreshToken } from '../store/authSlice';
 
-// Create axios instance
+// Create axios instance - use Nginx load balancer
 const api = axios.create({
-    baseURL: 'http://localhost:8001',
+    baseURL: 'http://localhost',
     timeout: 10000,
 });
 
@@ -70,24 +70,24 @@ api.interceptors.response.use(
 // Export the configured axios instance
 export default api;
 
-// Export individual service APIs
+// Export individual service APIs - use Nginx load balancer paths
 export const authAPI = axios.create({
-    baseURL: 'http://localhost:8001',
+    baseURL: 'http://localhost/auth',
     timeout: 10000,
 });
 
 export const catalogAPI = axios.create({
-    baseURL: 'http://localhost:8002',
+    baseURL: 'http://localhost/catalog',
     timeout: 10000,
 });
 
 export const bookingAPI = axios.create({
-    baseURL: 'http://localhost:8003',
+    baseURL: 'http://localhost/booking',
     timeout: 10000,
 });
 
 export const paymentAPI = axios.create({
-    baseURL: 'http://localhost:8004',
+    baseURL: 'http://localhost/payment',
     timeout: 10000,
 });
 

@@ -6,7 +6,7 @@ export const refreshToken = createAsyncThunk(
     'auth/refreshToken',
     async (refreshTokenValue, { rejectWithValue }) => {
         try {
-            const response = await axios.post('http://localhost:8001/refresh', {
+            const response = await axios.post('http://localhost/auth/refresh', {
                 refresh_token: refreshTokenValue
             });
             return response.data;
@@ -21,7 +21,7 @@ export const verifyToken = createAsyncThunk(
     'auth/verifyToken',
     async (token, { rejectWithValue }) => {
         try {
-            const response = await axios.post('http://localhost:8001/verify', {
+            const response = await axios.post('http://localhost/auth/verify', {
                 token: token
             });
             return response.data;

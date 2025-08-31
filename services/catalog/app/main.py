@@ -34,6 +34,10 @@ def get_db():
 def startup():
     Base.metadata.create_all(bind=engine)
     # seed events if empty
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "catalog"}
     db = SessionLocal()
     try:
         count = db.query(Event).count()

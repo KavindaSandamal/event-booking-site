@@ -37,7 +37,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
+    try:
+        print("Starting booking service...")
+        Base.metadata.create_all(bind=engine)
+        print("Database tables created successfully")
+        print("Booking service startup complete")
+    except Exception as e:
+        print(f"Error during startup: {e}")
+        raise e
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "booking"}
+
+@app.get("/test")
+def test_endpoint():
+    return {"message": "Test endpoint working"}
 
 def get_db():
     db = SessionLocal()

@@ -103,12 +103,12 @@ pipeline {
                 script {
                     // Update Kubernetes deployments with new images
                     sh """
-                        # Update all service deployments
-                        kubectl set image deployment/auth-service auth-service=auth-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/booking-service booking-service=booking-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/catalog-service catalog-service=catalog-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/payment-service payment-service=payment-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/frontend-service frontend-service=frontend-service:${BUILD_TAG} -n ${NAMESPACE}
+                        # Update all service deployments with correct container names
+                        kubectl set image deployment/auth-service auth=auth-service:${BUILD_TAG} -n ${NAMESPACE}
+                        kubectl set image deployment/booking-service booking=booking-service:${BUILD_TAG} -n ${NAMESPACE}
+                        kubectl set image deployment/catalog-service catalog=catalog-service:${BUILD_TAG} -n ${NAMESPACE}
+                        kubectl set image deployment/payment-service payment=payment-service:${BUILD_TAG} -n ${NAMESPACE}
+                        kubectl set image deployment/frontend-service frontend=frontend-service:${BUILD_TAG} -n ${NAMESPACE}
                         
                         # Wait for rollouts to complete
                         kubectl rollout status deployment/auth-service -n ${NAMESPACE} --timeout=300s

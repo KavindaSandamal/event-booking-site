@@ -17,12 +17,13 @@ BOOKING_URL = os.getenv("BOOKING_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
+# Create FastAPI app
 app = FastAPI(title="Payment Service")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://event-booking.local", "https://event-booking.local"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

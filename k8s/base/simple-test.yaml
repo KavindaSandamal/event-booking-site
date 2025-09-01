@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-test
+  namespace: event-booking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-test
+  template:
+    metadata:
+      labels:
+        app: simple-test
+    spec:
+      containers:
+      - name: hello
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Hello Kubernetes!" && sleep 3600']
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: simple-test-service
+  namespace: event-booking
+spec:
+  selector:
+    app: simple-test
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP

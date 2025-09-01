@@ -2,9 +2,9 @@ import axios from 'axios';
 import { store } from '../store';
 import { logout, refreshToken, selectToken, selectRefreshToken } from '../store/authSlice';
 
-// Create axios instance - use Nginx load balancer
+// Create axios instance - use Ingress hostname
 const api = axios.create({
-    baseURL: 'http://localhost',
+    baseURL: 'http://event-booking.local',
     timeout: 10000,
 });
 
@@ -70,24 +70,24 @@ api.interceptors.response.use(
 // Export the configured axios instance
 export default api;
 
-// Export individual service APIs - use Nginx load balancer paths
+// Export individual service APIs - use correct service paths
 export const authAPI = axios.create({
-    baseURL: 'http://localhost/auth',
+    baseURL: 'http://event-booking.local/auth',
     timeout: 10000,
 });
 
 export const catalogAPI = axios.create({
-    baseURL: 'http://localhost/catalog',
+    baseURL: 'http://event-booking.local/catalog',
     timeout: 10000,
 });
 
 export const bookingAPI = axios.create({
-    baseURL: 'http://localhost/booking',
+    baseURL: 'http://event-booking.local/booking',
     timeout: 10000,
 });
 
 export const paymentAPI = axios.create({
-    baseURL: 'http://localhost/payment',
+    baseURL: 'http://event-booking.local/payment',
     timeout: 10000,
 });
 

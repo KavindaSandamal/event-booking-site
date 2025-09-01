@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 3000
+    port: 3000,
+    allowedHosts: ['event-booking.local', 'localhost', '127.0.0.1']
   }
 })

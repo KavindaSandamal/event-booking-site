@@ -102,8 +102,10 @@ pipeline {
                                         if [ -f "$service/tests/test_*.py" ]; then
                                             echo "Running tests for $service"
                                             cd $service
-                                            python -m pytest tests/ -v || true
+                                            python -m pytest tests/ -v || echo "Tests failed for $service, continuing..."
                                             cd ..
+                                        else
+                                            echo "No tests found for $service"
                                         fi
                                     done
                                 """
@@ -118,8 +120,12 @@ pipeline {
                             dir('frontend') {
                                 sh """
                                     # Install dependencies and run tests
-                                    npm install || true
-                                    npm test -- --coverage --watchAll=false || true
+                                    if command -v npm >/dev/null 2>&1; then
+                                        npm install || echo "npm install failed, continuing..."
+                                        npm test -- --coverage --watchAll=false || echo "Frontend tests failed, continuing..."
+                                    else
+                                        echo "npm not available, skipping frontend tests"
+                                    fi
                                 """
                             }
                         }

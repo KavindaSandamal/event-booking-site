@@ -16,7 +16,7 @@ spec:
       serviceAccountName: event-booking-sa
       containers:
       - name: frontend
-        image: event-booking-platform-frontend:v3
+        image: frontend-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000

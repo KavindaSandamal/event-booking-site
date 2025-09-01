@@ -16,7 +16,7 @@ spec:
       serviceAccountName: event-booking-sa
       containers:
       - name: auth
-        image: event-booking-platform-auth:latest
+        image: auth-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

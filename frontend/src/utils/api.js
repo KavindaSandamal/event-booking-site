@@ -5,8 +5,11 @@ import { logout, refreshToken, selectToken, selectRefreshToken } from '../store/
 // Create axios instance - use Ingress hostname
 const api = axios.create({
     baseURL: 'http://event-booking.local',
-    timeout: 10000,
+    timeout: 30000, // Increased timeout for all API calls
 });
+
+// Debug log to confirm timeout settings
+console.log('Frontend API timeout set to:', api.defaults.timeout);
 
 // Request interceptor to add auth token
 api.interceptors.request.use(
@@ -73,22 +76,25 @@ export default api;
 // Export individual service APIs - use correct service paths
 export const authAPI = axios.create({
     baseURL: 'http://event-booking.local/auth',
-    timeout: 10000,
+    timeout: 20000, // Increased timeout for auth processing
 });
 
 export const catalogAPI = axios.create({
     baseURL: 'http://event-booking.local/catalog',
-    timeout: 10000,
+    timeout: 20000, // Increased timeout for catalog operations
 });
 
 export const bookingAPI = axios.create({
     baseURL: 'http://event-booking.local/booking',
-    timeout: 10000,
+    timeout: 30000, // Increased timeout for booking processing
 });
+
+// Debug log to confirm booking API timeout settings
+console.log('Booking API timeout set to:', bookingAPI.defaults.timeout);
 
 export const paymentAPI = axios.create({
     baseURL: 'http://event-booking.local/payment',
-    timeout: 10000,
+    timeout: 15000, // Increased timeout for payment processing
 });
 
 // Add interceptors to all service APIs

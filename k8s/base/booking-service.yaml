@@ -16,7 +16,7 @@ spec:
       serviceAccountName: event-booking-sa
       containers:
       - name: booking
-        image: event-booking-platform-booking:latest
+        image: booking-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

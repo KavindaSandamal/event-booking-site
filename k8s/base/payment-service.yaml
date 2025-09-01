@@ -16,7 +16,7 @@ spec:
       serviceAccountName: event-booking-sa
       containers:
       - name: payment
-        image: event-booking-platform-payment:latest
+        image: payment-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000

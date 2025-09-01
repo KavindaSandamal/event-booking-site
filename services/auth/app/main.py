@@ -11,10 +11,23 @@ from .schemas import UserCreate, Token, RefreshToken
 from .utils import hash_password, verify_password, create_access_token, create_refresh_token
 from pydantic import BaseModel
 from datetime import datetime, timezone
+import time
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
+# Create engine with connection pooling and retry mechanism
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=5,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=1800,  # 30 minutes
+    pool_timeout=30,
+    connect_args={
+        "connect_timeout": 10,
+        "application_name": "auth_service"
+    }
+)
 SessionLocal = sessionmaker(bind=engine)
 
 # Create FastAPI app
@@ -31,7 +44,23 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
+    # Add retry mechanism for database connection
+    max_retries = 5
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Database tables created successfully")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Database connection attempt {attempt + 1} failed: {e}")
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(f"Failed to connect to database after {max_retries} attempts")
+                raise e
 
 @app.get("/health")
 def health_check():
@@ -41,28 +70,38 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        print(f"Database session error: {e}")
+        db.rollback()
+        raise e
     finally:
         db.close()
 
 @app.post("/register", response_model=Token)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == user_in.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(email=user_in.email, password_hash=hash_password(user_in.password))
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
-    
-    return {
-        "access_token": access_token, 
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": 30 * 60  # 30 minutes in seconds
-    }
+    try:
+        existing = db.query(User).filter(User.email == user_in.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        user = User(email=user_in.email, password_hash=hash_password(user_in.password))
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+        access_token = create_access_token(str(user.id))
+        refresh_token = create_refresh_token(str(user.id))
+        
+        return {
+            "access_token": access_token, 
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 30 * 60  # 30 minutes in seconds
+        }
+    except Exception as e:
+        print(f"Registration error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Registration failed")
 
 class LoginModel(BaseModel):
     email: str
@@ -70,19 +109,23 @@ class LoginModel(BaseModel):
 
 @app.post("/login", response_model=Token)
 def login(credentials: LoginModel, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == credentials.email).first()
-    if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_access_token(str(user.id))
-    refresh_token = create_refresh_token(str(user.id))
-    
-    return {
-        "access_token": access_token, 
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "expires_in": 30 * 60  # 30 minutes in seconds
-    }
+    try:
+        user = db.query(User).filter(User.email == credentials.email).first()
+        if not user or not verify_password(credentials.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        access_token = create_access_token(str(user.id))
+        refresh_token = create_refresh_token(str(user.id))
+        
+        return {
+            "access_token": access_token, 
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": 30 * 60  # 30 minutes in seconds
+        }
+    except Exception as e:
+        print(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
 
 @app.post("/refresh", response_model=Token)
 def refresh_token(refresh_token_req: RefreshToken, db: Session = Depends(get_db)):

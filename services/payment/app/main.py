@@ -9,12 +9,21 @@ from .models import Base, Payment
 from .schemas import PaymentRequest, PaymentResponse
 import httpx
 import uuid
+import time
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 AUTH_URL = os.getenv("AUTH_URL")
 BOOKING_URL = os.getenv("BOOKING_URL")
 
-engine = create_engine(DATABASE_URL)
+# Create engine with connection pooling and retry mechanism
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+    pool_recycle=3600,
+    connect_args={"connect_timeout": 10}
+)
 SessionLocal = sessionmaker(bind=engine)
 
 # Create FastAPI app
@@ -31,7 +40,23 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup():
-    Base.metadata.create_all(bind=engine)
+    # Add retry mechanism for database connection
+    max_retries = 5
+    retry_delay = 5
+    
+    for attempt in range(max_retries):
+        try:
+            Base.metadata.create_all(bind=engine)
+            print("Database tables created successfully")
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                print(f"Database connection attempt {attempt + 1} failed: {e}")
+                print(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                print(f"Failed to connect to database after {max_retries} attempts")
+                raise e
 
 @app.get("/health")
 def health_check():
@@ -50,13 +75,14 @@ async def get_current_user(authorization: str = Header(None)):
         raise HTTPException(401, "Missing auth")
     token = authorization.split(" ")[1]
     
-    # Verify token via auth service
+    # Verify token via auth service with reduced timeout
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(f"{AUTH_URL}/verify", json={"token": token}, timeout=5.0)
+            resp = await client.post(f"{AUTH_URL}/verify", json={"token": token}, timeout=2.0)
             if resp.status_code == 200:
                 return resp.json()["user_id"]
-        except Exception:
+        except Exception as e:
+            print(f"Auth service error: {e}")
             pass
     
     raise HTTPException(401, "Invalid token")
@@ -77,14 +103,15 @@ async def process_payment(payment_req: PaymentRequest, authorization: str = Head
     db.commit()
     db.refresh(payment)
     
-    # Update booking status to confirmed
+    # Update booking status to confirmed with reduced timeout
     try:
         async with httpx.AsyncClient() as client:
-            resp = await client.put(f"{BOOKING_URL}/confirm-booking/{payment_req.booking_id}")
+            resp = await client.put(f"{BOOKING_URL}/confirm-booking/{payment_req.booking_id}", timeout=2.0)
             if resp.status_code != 200:
                 print(f"Failed to confirm booking: {resp.text}")
     except Exception as e:
         print(f"Error confirming booking: {e}")
+        # Don't fail the payment if booking confirmation fails
     
     return PaymentResponse(
         payment_id=str(payment.id),

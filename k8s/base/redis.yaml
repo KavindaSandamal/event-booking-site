@@ -12,38 +12,27 @@ spec:
   storageClassName: standard
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  name: redis-cluster
+  name: redis
   namespace: event-booking
 spec:
-  serviceName: redis-cluster
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
-      app: redis-cluster
+      app: redis
   template:
     metadata:
       labels:
-        app: redis-cluster
+        app: redis
     spec:
       serviceAccountName: event-booking-sa
       containers:
       - name: redis
         image: redis:7-alpine
-        command:
-        - redis-server
-        - --appendonly
-        - yes
-        - --cluster-enabled
-        - yes
-        - --cluster-config-file
-        - nodes.conf
-        - --cluster-node-timeout
-        - "5000"
+        command: ["redis-server", "--appendonly", "yes"]
         ports:
         - containerPort: 6379
-        - containerPort: 16379
         volumeMounts:
         - name: redis-storage
           mountPath: /data
@@ -56,16 +45,12 @@ spec:
             cpu: "200m"
         livenessProbe:
           exec:
-            command:
-            - redis-cli
-            - ping
+            command: ["redis-cli", "ping"]
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           exec:
-            command:
-            - redis-cli
-            - ping
+            command: ["redis-cli", "ping"]
           initialDelaySeconds: 5
           periodSeconds: 5
       volumes:
@@ -76,16 +61,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-cluster
+  name: redis
   namespace: event-booking
 spec:
   selector:
-    app: redis-cluster
+    app: redis
   ports:
   - port: 6379
     targetPort: 6379
     name: redis
-  - port: 16379
-    targetPort: 16379
-    name: cluster
   type: ClusterIP

@@ -1,4 +1,21 @@
-pipeline {
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job@1300.vd2290d3344a_f">
+  <description>Event Booking Platform CI/CD Pipeline</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+      <triggers>
+        <hudson.triggers.SCMTrigger>
+          <spec>H/5 * * * *</spec>
+        </hudson.triggers.SCMTrigger>
+        <com.cloudbees.jenkins.GitHubPushTrigger plugin="github@1.35.1">
+          <spec></spec>
+        </com.cloudbees.jenkins.GitHubPushTrigger>
+      </triggers>
+    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@3697.vb_490d892d019d">
+    <script>pipeline {
     agent any
     
     environment {
@@ -6,6 +23,7 @@ pipeline {
         PROJECT_NAME = 'event-booking-platform'
         KUBERNETES_NAMESPACE = 'event-booking'
         MINIKUBE_IP = '192.168.49.2'
+        GITHUB_WEBHOOK_URL = 'http://event-booking.local/jenkins/github-webhook/'
     }
     
     stages {
@@ -54,7 +72,6 @@ pipeline {
             steps {
                 echo '🔒 Running security scans...'
                 script {
-                    // Run Trivy vulnerability scanner
                     sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL node:18-alpine || echo "Security scan completed"'
                     sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL python:3.11-alpine || echo "Security scan completed"'
                 }
@@ -148,7 +165,6 @@ pipeline {
             steps {
                 echo '🔗 Running integration tests...'
                 script {
-                    // Start services and run integration tests
                     sh '''
                         echo "Starting integration test environment..."
                         docker-compose -f docker-compose.test.yml up -d
@@ -190,7 +206,6 @@ pipeline {
             steps {
                 echo '🚀 Deploying to Minikube...'
                 script {
-                    // Update Kubernetes manifests with new image tags
                     sh '''
                         sed -i "s|image: .*|image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:${BUILD_NUMBER}|g" k8s/base/frontend-service.yaml
                         sed -i "s|image: .*|image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-auth:${BUILD_NUMBER}|g" k8s/base/auth-service.yaml
@@ -199,7 +214,6 @@ pipeline {
                         sed -i "s|image: .*|image: ${DOCKER_REGISTRY}/${PROJECT_NAME}-payment:${BUILD_NUMBER}|g" k8s/base/payment-service.yaml
                     '''
                     
-                    // Deploy to Kubernetes
                     sh '''
                         kubectl apply -f k8s/base/namespace.yaml
                         kubectl apply -f k8s/base/configmap.yaml
@@ -213,7 +227,6 @@ pipeline {
                         kubectl apply -f k8s/base/ingress-working.yaml
                     '''
                     
-                    // Wait for deployment
                     sh '''
                         kubectl rollout status deployment/auth-service -n ${KUBERNETES_NAMESPACE} --timeout=300s
                         kubectl rollout status deployment/catalog-service -n ${KUBERNETES_NAMESPACE} --timeout=300s
@@ -252,7 +265,6 @@ pipeline {
                 script {
                     sh '''
                         echo "Running load tests..."
-                        # Using Apache Bench for simple load testing
                         ab -n 100 -c 10 http://${MINIKUBE_IP}/catalog/events || echo "Performance test completed"
                     '''
                 }
@@ -280,7 +292,6 @@ pipeline {
         failure {
             echo '❌ Pipeline failed!'
             script {
-                // Send notification on failure
                 echo "🚨 Build ${BUILD_NUMBER} failed on branch ${BRANCH_NAME}"
             }
         }
@@ -290,4 +301,9 @@ pipeline {
             cleanWs()
         }
     }
-}
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

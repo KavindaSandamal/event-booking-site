@@ -5,6 +5,7 @@ COPY package.json .
 COPY package-lock.json .
 RUN npm ci
 COPY . .
+RUN chmod +x node_modules/.bin/*
 RUN npm run build
 
 # Production stage

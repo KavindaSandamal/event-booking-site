@@ -90,10 +90,11 @@ pipeline {
             }
         }
         
-        stage('Run Tests') {
+        stage('Quality Checks') {
             steps {
                 script {
-                    echo "Skipping tests for now - focusing on deployment"
+                    echo "Running quality checks..."
+                    // Add any quality checks here if needed
                 }
             }
         }

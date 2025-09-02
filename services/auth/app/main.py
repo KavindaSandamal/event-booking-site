@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import create_engine
@@ -9,6 +9,9 @@ import os
 from .models import Base, User
 from .schemas import UserCreate, Token, RefreshToken
 from .utils import hash_password, verify_password, create_access_token, create_refresh_token
+from .security import SecurityValidator, PasswordValidator, SecureUserCreate, SecureUserLogin
+from .rate_limiter import check_rate_limit
+from .security_middleware import SecurityHeadersMiddleware, RequestLoggingMiddleware, RateLimitMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import time
@@ -32,6 +35,11 @@ SessionLocal = sessionmaker(bind=engine)
 
 # Create FastAPI app
 app = FastAPI(title="Auth Service")
+
+# Add CORS middleware
+# Add security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -78,13 +86,28 @@ def get_db():
         db.close()
 
 @app.post("/register", response_model=Token)
-def register(user_in: UserCreate, db: Session = Depends(get_db)):
+async def register(user_in: SecureUserCreate, request: Request, db: Session = Depends(get_db)):
     try:
+        # Check rate limit
+        await check_rate_limit(request, "register")
+        
+        # Additional security validation
+        if not SecurityValidator.validate_input(user_in.username, "username"):
+            raise HTTPException(status_code=400, detail="Invalid username format")
+        
+        if not SecurityValidator.validate_input(user_in.email, "email"):
+            raise HTTPException(status_code=400, detail="Invalid email format")
+        
+        # Check for existing user
         existing = db.query(User).filter(User.email == user_in.email).first()
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
         
-        user = User(email=user_in.email, password_hash=hash_password(user_in.password))
+        # Create user with secure password hashing
+        user = User(
+            email=user_in.email, 
+            password_hash=PasswordValidator.hash_password(user_in.password)
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
@@ -108,10 +131,20 @@ class LoginModel(BaseModel):
     password: str
 
 @app.post("/login", response_model=Token)
-def login(credentials: LoginModel, db: Session = Depends(get_db)):
+async def login(credentials: SecureUserLogin, request: Request, db: Session = Depends(get_db)):
     try:
-        user = db.query(User).filter(User.email == credentials.email).first()
-        if not user or not verify_password(credentials.password, user.password_hash):
+        # Check rate limit
+        await check_rate_limit(request, "login")
+        
+        # Additional security validation
+        if not SecurityValidator.validate_input(credentials.username, "username"):
+            raise HTTPException(status_code=400, detail="Invalid username format")
+        
+        if not SecurityValidator.validate_input(credentials.password, "password"):
+            raise HTTPException(status_code=400, detail="Invalid password format")
+        
+        user = db.query(User).filter(User.email == credentials.username).first()
+        if not user or not PasswordValidator.verify_password(credentials.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         access_token = create_access_token(str(user.id))

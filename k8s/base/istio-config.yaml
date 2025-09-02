@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: istio-config
+  namespace: event-booking
+data:
+  # Virtual Service for traffic routing
+  virtual-service.yaml: |
+    apiVersion: networking.istio.io/v1beta1
+    kind: VirtualService
+    metadata:
+      name: event-booking-vs
+      namespace: event-booking
+    spec:
+      hosts:
+      - event-booking.local
+      gateways:
+      - event-booking-gateway
+      http:
+      - match:
+        - uri:
+            prefix: /api/auth
+        route:
+        - destination:
+            host: auth-service
+            port:
+              number: 8000
+        timeout: 30s
+        retries:
+          attempts: 3
+          perTryTimeout: 10s
+      - match:
+        - uri:
+            prefix: /api/booking
+        route:
+        - destination:
+            host: booking-service
+            port:
+              number: 8000
+        timeout: 30s
+        retries:
+          attempts: 3
+          perTryTimeout: 10s
+      - match:
+        - uri:
+            prefix: /api/catalog
+        route:
+        - destination:
+            host: catalog-service
+            port:
+              number: 8000
+        timeout: 30s
+        retries:
+          attempts: 3
+          perTryTimeout: 10s
+      - match:
+        - uri:
+            prefix: /api/payment
+        route:
+        - destination:
+            host: payment-service
+            port:
+              number: 8000
+        timeout: 30s
+        retries:
+          attempts: 3
+          perTryTimeout: 10s
+      - route:
+        - destination:
+            host: frontend-service
+            port:
+              number: 3000
+        timeout: 30s
+  
+  # Destination Rule for load balancing
+  destination-rule.yaml: |
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: event-booking-dr
+      namespace: event-booking
+    spec:
+      host: auth-service
+      trafficPolicy:
+        loadBalancer:
+          simple: ROUND_ROBIN
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http1MaxPendingRequests: 50
+            maxRequestsPerConnection: 10
+        circuitBreaker:
+          consecutiveErrors: 3
+          interval: 30s
+          baseEjectionTime: 30s
+          maxEjectionPercent: 50
+    ---
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: booking-service-dr
+      namespace: event-booking
+    spec:
+      host: booking-service
+      trafficPolicy:
+        loadBalancer:
+          simple: ROUND_ROBIN
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http1MaxPendingRequests: 50
+            maxRequestsPerConnection: 10
+        circuitBreaker:
+          consecutiveErrors: 3
+          interval: 30s
+          baseEjectionTime: 30s
+          maxEjectionPercent: 50
+    ---
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: catalog-service-dr
+      namespace: event-booking
+    spec:
+      host: catalog-service
+      trafficPolicy:
+        loadBalancer:
+          simple: ROUND_ROBIN
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http1MaxPendingRequests: 50
+            maxRequestsPerConnection: 10
+        circuitBreaker:
+          consecutiveErrors: 3
+          interval: 30s
+          baseEjectionTime: 30s
+          maxEjectionPercent: 50
+    ---
+    apiVersion: networking.istio.io/v1beta1
+    kind: DestinationRule
+    metadata:
+      name: payment-service-dr
+      namespace: event-booking
+    spec:
+      host: payment-service
+      trafficPolicy:
+        loadBalancer:
+          simple: ROUND_ROBIN
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http1MaxPendingRequests: 50
+            maxRequestsPerConnection: 10
+        circuitBreaker:
+          consecutiveErrors: 3
+          interval: 30s
+          baseEjectionTime: 30s
+          maxEjectionPercent: 50
+  
+  # Gateway for external access
+  gateway.yaml: |
+    apiVersion: networking.istio.io/v1beta1
+    kind: Gateway
+    metadata:
+      name: event-booking-gateway
+      namespace: event-booking
+    spec:
+      selector:
+        istio: ingressgateway
+      servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+        hosts:
+        - event-booking.local
+      - port:
+          number: 443
+          name: https
+          protocol: HTTPS
+        tls:
+          mode: SIMPLE
+          credentialName: event-booking-tls
+        hosts:
+        - event-booking.local

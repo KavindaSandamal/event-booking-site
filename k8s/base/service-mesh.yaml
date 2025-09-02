@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: service-discovery-config
+  namespace: event-booking
+data:
+  services.yaml: |
+    services:
+      auth:
+        host: auth-service
+        port: 8000
+        health_check: /health
+        timeout: 30s
+        retry_attempts: 3
+      booking:
+        host: booking-service
+        port: 8000
+        health_check: /health
+        timeout: 30s
+        retry_attempts: 3
+      catalog:
+        host: catalog-service
+        port: 8000
+        health_check: /health
+        timeout: 30s
+        retry_attempts: 3
+      payment:
+        host: payment-service
+        port: 8000
+        health_check: /health
+        timeout: 30s
+        retry_attempts: 3
+      frontend:
+        host: frontend-service
+        port: 3000
+        health_check: /
+        timeout: 30s
+        retry_attempts: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service-lb
+  namespace: event-booking
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: auth-service
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: booking-service-lb
+  namespace: event-booking
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: booking-service
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-service-lb
+  namespace: event-booking
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: catalog-service
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service-lb
+  namespace: event-booking
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  selector:
+    app: payment-service
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP

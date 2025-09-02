@@ -6,3 +6,6 @@ pydantic
 redis
 aio_pika
 httpx
+grpcio
+grpcio-tools
+protobuf

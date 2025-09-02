@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package booking;
+
+// Booking service definition
+service BookingService {
+  rpc CreateBooking(CreateBookingRequest) returns (BookingResponse);
+  rpc GetBooking(GetBookingRequest) returns (BookingDetailsResponse);
+  rpc UpdateBookingStatus(UpdateBookingStatusRequest) returns (BookingResponse);
+  rpc ListBookings(ListBookingsRequest) returns (ListBookingsResponse);
+}
+
+// Request messages
+message CreateBookingRequest {
+  string user_id = 1;
+  string event_id = 2;
+  int32 tickets = 3;
+  string payment_method = 4;
+}
+
+message GetBookingRequest {
+  string booking_id = 1;
+}
+
+message UpdateBookingStatusRequest {
+  string booking_id = 1;
+  string status = 2;
+}
+
+message ListBookingsRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+// Response messages
+message BookingResponse {
+  bool success = 1;
+  string booking_id = 2;
+  string message = 3;
+}
+
+message BookingDetailsResponse {
+  bool success = 1;
+  string booking_id = 2;
+  string user_id = 3;
+  string event_id = 4;
+  int32 tickets = 5;
+  string status = 6;
+  string created_at = 7;
+  string message = 8;
+}
+
+message ListBookingsResponse {
+  bool success = 1;
+  repeated BookingDetailsResponse bookings = 2;
+  int32 total = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+  string message = 6;
+}

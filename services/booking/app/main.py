@@ -12,6 +12,10 @@ import aio_pika
 import asyncio
 import httpx
 from typing import List
+from .circuit_breaker import auth_circuit_breaker, payment_circuit_breaker, catalog_circuit_breaker
+from .retry import async_retry, network_retry, database_retry
+from .event_publisher import event_publisher
+from .event_consumer import setup_event_consumers
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_URL = os.getenv("REDIS_URL")
@@ -49,9 +53,18 @@ app.add_middleware(
 )
 
 @app.on_event("startup")
-def startup():
+async def startup():
     try:
         print("Starting booking service...")
+        
+        # Initialize event consumers
+        await setup_event_consumers()
+        print("Event consumers initialized successfully")
+        
+        # Initialize event publisher
+        await event_publisher.connect()
+        print("Event publisher initialized successfully")
+        
         # Add retry mechanism for database connection
         import time
         max_retries = 5
@@ -75,6 +88,15 @@ def startup():
     except Exception as e:
         print(f"Error during startup: {e}")
         raise e
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Clean up resources on shutdown."""
+    try:
+        await event_publisher.close()
+        print("Event publisher closed successfully")
+    except Exception as e:
+        print(f"Error closing event publisher: {e}")
 
 @app.get("/health")
 def health_check():
@@ -124,27 +146,41 @@ async def cleanup_pending_bookings(authorization: str = Header(None), db: Sessio
         db.rollback()
         raise HTTPException(500, f"Cleanup failed: {str(e)}")
 
-# Simple auth: expect Authorization: Bearer <token>
+# Enhanced auth with circuit breaker and retry patterns
+@auth_circuit_breaker
+@async_retry(network_retry)
+async def verify_token_with_auth_service(token: str) -> str:
+    """Verify token with auth service using circuit breaker and retry."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            f"{AUTH_URL}/verify", 
+            json={"token": token}, 
+            timeout=5.0
+        )
+        if resp.status_code == 200:
+            return resp.json()["user_id"]
+        else:
+            raise HTTPException(401, "Invalid token")
+
 async def get_current_user(authorization: str = Header(None)):
+    """Get current user with enhanced error handling."""
     if not authorization:
         raise HTTPException(401, "Missing auth")
+    
     token = authorization.split(" ")[1]
-    # For demo, we just return token; in real, verify token via auth service.
-    # Optionally call auth service to validate token
-    async with httpx.AsyncClient() as client:
-        try:
-            resp = await client.post(f"{AUTH_URL}/verify", json={"token": token}, timeout=2.0)
-            if resp.status_code == 200:
-                return resp.json()["user_id"]
-        except Exception as e:
-            print(f"Auth service error: {e}")
-            pass
-    # If auth service doesn't offer verify, treat token as user_id (for demo)
+    
     try:
-        uid = uuid.UUID(token)
-        return str(uid)
-    except:
-        raise HTTPException(401, "Invalid token")
+        # Try to verify with auth service using circuit breaker
+        user_id = await verify_token_with_auth_service(token)
+        return user_id
+    except Exception as e:
+        print(f"Auth service error: {e}")
+        # Fallback: treat token as user_id (for demo purposes)
+        try:
+            uid = uuid.UUID(token)
+            return str(uid)
+        except:
+            raise HTTPException(401, "Invalid token")
 
 @app.post("/book", response_model=BookingOut)
 async def create_booking(req: BookingRequest, authorization: str = Header(None), db: Session = Depends(get_db)):
@@ -229,6 +265,23 @@ async def create_booking(req: BookingRequest, authorization: str = Header(None),
         db.commit()
         db.refresh(booking)
         print(f"[{time.time():.3f}] Booking created in database with ID: {booking.id}")
+        
+        # Publish booking created event
+        try:
+            await event_publisher.connect()
+            booking_data = {
+                "booking_id": str(booking.id),
+                "user_id": user_id,
+                "event_id": str(req.event_id),
+                "seats": req.seats,
+                "status": "confirmed",
+                "created_at": booking.created_at.isoformat()
+            }
+            await event_publisher.publish_booking_created(booking_data)
+            print(f"[{time.time():.3f}] Booking created event published")
+        except Exception as e:
+            print(f"[{time.time():.3f}] Failed to publish booking event: {e}")
+            # Don't fail the booking creation if event publishing fails
 
         # Publish to RabbitMQ as background task (non-blocking)
         print(f"[{time.time():.3f}] Publishing to RabbitMQ as background task...")

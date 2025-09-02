@@ -71,6 +71,7 @@ def startup():
                 raise e
 
 @app.get("/health")
+@app.get("/auth/health")
 def health_check():
     return {"status": "healthy", "service": "auth"}
 
@@ -86,6 +87,7 @@ def get_db():
         db.close()
 
 @app.post("/register", response_model=Token)
+@app.post("/auth/register", response_model=Token)
 async def register(user_in: SecureUserCreate, request: Request, db: Session = Depends(get_db)):
     try:
         # Check rate limit
@@ -131,6 +133,7 @@ class LoginModel(BaseModel):
     password: str
 
 @app.post("/login", response_model=Token)
+@app.post("/auth/login", response_model=Token)
 async def login(credentials: SecureUserLogin, request: Request, db: Session = Depends(get_db)):
     try:
         # Check rate limit

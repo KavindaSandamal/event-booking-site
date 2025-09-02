@@ -3,121 +3,62 @@ pipeline {
     
     environment {
         DOCKER_REGISTRY = 'minikube'
-        KUBECONFIG = '/root/.kube/config'
-        NAMESPACE = 'event-booking'
     }
     
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
-                script {
-                    env.GIT_COMMIT_SHORT = sh(
-                        script: 'git rev-parse --short HEAD',
-                        returnStdout: true
-                    ).trim()
-                    env.BUILD_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT_SHORT}"
-                }
             }
         }
         
         stage('Build Images') {
-            parallel {
-                stage('Build Auth Service') {
-                    steps {
-                        script {
-                            dir('services/auth') {
-                                sh """
-                                    docker build -t auth-service:${BUILD_TAG} .
-                                    docker tag auth-service:${BUILD_TAG} auth-service:latest
-                                """
-                            }
-                        }
-                    }
-                }
-                
-                stage('Build Booking Service') {
-                    steps {
-                        script {
-                            dir('services/booking') {
-                                sh """
-                                    docker build -t booking-service:${BUILD_TAG} .
-                                    docker tag booking-service:${BUILD_TAG} booking-service:latest
-                                """
-                            }
-                        }
-                    }
-                }
-                
-                stage('Build Catalog Service') {
-                    steps {
-                        script {
-                            dir('services/catalog') {
-                                sh """
-                                    docker build -t catalog-service:${BUILD_TAG} .
-                                    docker tag catalog-service:${BUILD_TAG} catalog-service:latest
-                                """
-                            }
-                        }
-                    }
-                }
-                
-                stage('Build Payment Service') {
-                    steps {
-                        script {
-                            dir('services/payment') {
-                                sh """
-                                    docker build -t payment-service:${BUILD_TAG} .
-                                    docker tag payment-service:${BUILD_TAG} payment-service:latest
-                                """
-                            }
-                        }
-                    }
-                }
-                
-                stage('Build Frontend') {
-                    steps {
-                        script {
-                            dir('frontend') {
-                                sh """
-                                    docker build -t frontend-service:${BUILD_TAG} .
-                                    docker tag frontend-service:${BUILD_TAG} frontend-service:latest
-                                """
-                            }
-                        }
-                    }
+            steps {
+                script {
+                    // Set minikube docker environment
+                    sh '''
+                        eval $(minikube -p minikube docker-env)
+                        
+                        # Build auth service
+                        docker build -t auth-service:latest -f services/auth/Dockerfile services/auth/
+                        
+                        # Build booking service
+                        docker build -t booking-service:latest -f services/booking/Dockerfile services/booking/
+                        
+                        # Build catalog service
+                        docker build -t catalog-service:latest -f services/catalog/Dockerfile services/catalog/
+                        
+                        # Build payment service
+                        docker build -t payment-service:latest -f services/payment/Dockerfile services/payment/
+                        
+                        # Build frontend
+                        docker build -t frontend:latest -f frontend/Dockerfile frontend/
+                    '''
                 }
             }
         }
         
-        stage('Quality Checks') {
+        stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    echo "Running quality checks..."
-                    // Add any quality checks here if needed
-                }
-            }
-        }
-        
-        stage('Deploy to Minikube') {
-            steps {
-                script {
-                    // Update Kubernetes deployments with new images
-                    sh """
-                        # Update all service deployments with correct container names
-                        kubectl set image deployment/auth-service auth=auth-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/booking-service booking=booking-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/catalog-service catalog=catalog-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/payment-service payment=payment-service:${BUILD_TAG} -n ${NAMESPACE}
-                        kubectl set image deployment/frontend-service frontend=frontend-service:${BUILD_TAG} -n ${NAMESPACE}
+                    sh '''
+                        # Apply base configurations
+                        kubectl apply -f k8s/base/
+                        
+                        # Restart deployments to use new images
+                        kubectl rollout restart deployment/auth-service -n event-booking
+                        kubectl rollout restart deployment/booking-service -n event-booking
+                        kubectl rollout restart deployment/catalog-service -n event-booking
+                        kubectl rollout restart deployment/payment-service -n event-booking
+                        kubectl rollout restart deployment/frontend -n event-booking
                         
                         # Wait for rollouts to complete
-                        kubectl rollout status deployment/auth-service -n ${NAMESPACE} --timeout=300s
-                        kubectl rollout status deployment/booking-service -n ${NAMESPACE} --timeout=300s
-                        kubectl rollout status deployment/catalog-service -n ${NAMESPACE} --timeout=300s
-                        kubectl rollout status deployment/payment-service -n ${NAMESPACE} --timeout=300s
-                        kubectl rollout status deployment/frontend-service -n ${NAMESPACE} --timeout=300s
-                    """
+                        kubectl rollout status deployment/auth-service -n event-booking
+                        kubectl rollout status deployment/booking-service -n event-booking
+                        kubectl rollout status deployment/catalog-service -n event-booking
+                        kubectl rollout status deployment/payment-service -n event-booking
+                        kubectl rollout status deployment/frontend -n event-booking
+                    '''
                 }
             }
         }
@@ -125,20 +66,19 @@ pipeline {
         stage('Health Check') {
             steps {
                 script {
-                    sh """
+                    sh '''
                         # Wait for services to be ready
                         sleep 30
                         
-                        # Check service health
-                        echo "Checking service health..."
-                        kubectl get pods -n ${NAMESPACE}
+                        # Check pod status
+                        kubectl get pods -n event-booking
                         
-                        # Test endpoints
-                        curl -f http://event-booking.local/auth/health || echo "Auth service health check failed"
-                        curl -f http://event-booking.local/booking/health || echo "Booking service health check failed"
-                        curl -f http://event-booking.local/catalog/health || echo "Catalog service health check failed"
-                        curl -f http://event-booking.local/payment/health || echo "Payment service health check failed"
-                    """
+                        # Test health endpoints
+                        kubectl port-forward -n event-booking service/auth-service 8000:8000 &
+                        sleep 5
+                        curl -f http://localhost:8000/health || exit 1
+                        pkill -f "kubectl port-forward"
+                    '''
                 }
             }
         }
@@ -146,21 +86,13 @@ pipeline {
     
     post {
         always {
-            // Clean up old images
-            sh """
-                docker image prune -f
-                docker system prune -f
-            """
+            cleanWs()
         }
-        
         success {
-            echo "✅ Deployment successful! Build ${BUILD_TAG} deployed to Minikube"
-            // Send notification (Slack, email, etc.)
+            echo 'Pipeline completed successfully!'
         }
-        
         failure {
-            echo "❌ Deployment failed for build ${BUILD_TAG}"
-            // Send failure notification
+            echo 'Pipeline failed!'
         }
     }
 }

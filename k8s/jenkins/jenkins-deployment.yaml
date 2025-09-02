@@ -33,7 +33,7 @@ spec:
       serviceAccountName: jenkins
       containers:
       - name: jenkins
-        image: jenkins-custom:latest
+        image: jenkins/jenkins:lts-jdk17
         securityContext:
           runAsUser: 0
         ports:
@@ -55,11 +55,11 @@ spec:
           mountPath: /root/.kube
         resources:
           requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
             memory: "1Gi"
             cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
       volumes:
       - name: jenkins-home
         persistentVolumeClaim:

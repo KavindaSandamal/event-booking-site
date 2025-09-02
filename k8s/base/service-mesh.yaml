@@ -12,6 +12,7 @@ data:
         health_check: /health
         timeout: 30s
         retry_attempts: 3
+        
       booking:
         host: booking-service
         port: 8000

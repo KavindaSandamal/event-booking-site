@@ -1,112 +1,3 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: rabbitmq-config
-  namespace: event-booking
-data:
-  rabbitmq.conf: |
-    default_vhost = /
-    default_user = admin
-    default_pass = admin123
-    default_permissions.configure = .*
-    default_permissions.read = .*
-    default_permissions.write = .*
-    management.load_definitions = /etc/rabbitmq/definitions.json
-  definitions.json: |
-    {
-      "users": [
-        {
-          "name": "admin",
-          "password": "admin123",
-          "tags": "administrator"
-        }
-      ],
-      "vhosts": [
-        {
-          "name": "/"
-        }
-      ],
-      "permissions": [
-        {
-          "user": "admin",
-          "vhost": "/",
-          "configure": ".*",
-          "write": ".*",
-          "read": ".*"
-        }
-      ],
-      "queues": [
-        {
-          "name": "booking_queue",
-          "vhost": "/",
-          "durable": true,
-          "auto_delete": false
-        },
-        {
-          "name": "payment_queue",
-          "vhost": "/",
-          "durable": true,
-          "auto_delete": false
-        },
-        {
-          "name": "notification_queue",
-          "vhost": "/",
-          "durable": true,
-          "auto_delete": false
-        }
-      ],
-      "exchanges": [
-        {
-          "name": "event_exchange",
-          "vhost": "/",
-          "type": "topic",
-          "durable": true,
-          "auto_delete": false
-        }
-      ],
-      "bindings": [
-        {
-          "source": "event_exchange",
-          "vhost": "/",
-          "destination": "booking_queue",
-          "destination_type": "queue",
-          "routing_key": "booking.*"
-        },
-        {
-          "source": "event_exchange",
-          "vhost": "/",
-          "destination": "payment_queue",
-          "destination_type": "queue",
-          "routing_key": "payment.*"
-        },
-        {
-          "source": "event_exchange",
-          "vhost": "/",
-          "destination": "notification_queue",
-          "destination_type": "queue",
-          "routing_key": "notification.*"
-        }
-      ]
-    }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: rabbitmq
-  namespace: event-booking
-spec:
-  selector:
-    app: rabbitmq
-  ports:
-    - protocol: TCP
-      port: 5672
-      targetPort: 5672
-      name: amqp
-    - protocol: TCP
-      port: 15672
-      targetPort: 15672
-      name: management
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -139,25 +30,50 @@ spec:
           value: "/"
         volumeMounts:
         - name: rabbitmq-config
-          mountPath: /etc/rabbitmq
+          mountPath: /etc/rabbitmq/rabbitmq.conf
+          subPath: rabbitmq.conf
+
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
             memory: "512Mi"
             cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
         livenessProbe:
           tcpSocket:
             port: 5672
-          initialDelaySeconds: 30
-          periodSeconds: 10
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 6
         readinessProbe:
           tcpSocket:
             port: 5672
-          initialDelaySeconds: 5
-          periodSeconds: 5
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 6
       volumes:
       - name: rabbitmq-config
         configMap:
           name: rabbitmq-config
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: event-booking
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+  - name: amqp
+    port: 5672
+    targetPort: 5672
+  - name: management
+    port: 15672
+    targetPort: 15672
+  type: ClusterIP

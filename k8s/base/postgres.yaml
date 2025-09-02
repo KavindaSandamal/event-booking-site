@@ -1,49 +1,81 @@
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: ConfigMap
 metadata:
-  name: postgres-primary-pvc
+  name: postgres-config
   namespace: event-booking
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: standard
+data:
+  postgresql.conf: |
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    superuser_reserved_connections = 3
+
+    # Memory Settings
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+
+    # Checkpoint Settings
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+
+    # Query Planner
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = off
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+
+    # Autovacuum
+    autovacuum = on
+    autovacuum_max_workers = 3
+    autovacuum_naptime = 1min
+
+    # Lock Management
+    deadlock_timeout = 1s
+    lock_timeout = 0
+
+    # Statement Timeout
+    statement_timeout = 30s
 ---
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: Service
 metadata:
-  name: postgres-replica-pvc
+  name: postgres
   namespace: event-booking
 spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: standard
+  ports:
+  - port: 5432
+    targetPort: 5432
+  clusterIP: None
+  selector:
+    app: postgres
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: postgres-primary
+  name: postgres
   namespace: event-booking
 spec:
-  serviceName: postgres-primary
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
-      app: postgres-primary
+      app: postgres
   template:
     metadata:
       labels:
-        app: postgres-primary
+        app: postgres
     spec:
-      serviceAccountName: event-booking-sa
       containers:
       - name: postgres
         image: postgres:15
+        args: ["-c", "config_file=/etc/postgresql/postgresql.conf"]
         ports:
         - containerPort: 5432
         env:
@@ -53,119 +85,50 @@ spec:
           value: "postgres"
         - name: POSTGRES_PASSWORD
           value: "password"
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         volumeMounts:
         - name: postgres-storage
           mountPath: /var/lib/postgresql/data
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+        - name: postgres-config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
         livenessProbe:
           exec:
             command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 30
-          periodSeconds: 10
+            - /bin/sh
+            - -c
+            - exec pg_isready -U postgres -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
         readinessProbe:
           exec:
             command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 5
-          periodSeconds: 5
+            - /bin/sh
+            - -c
+            - exec pg_isready -U postgres -h 127.0.0.1 -p 5432
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 5
       volumes:
-      - name: postgres-storage
-        persistentVolumeClaim:
-          claimName: postgres-primary-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-primary
-  namespace: event-booking
-spec:
-  selector:
-    app: postgres-primary
-  ports:
-  - port: 5432
-    targetPort: 5432
-  type: ClusterIP
----
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: postgres-replica
-  namespace: event-booking
-spec:
-  serviceName: postgres-replica
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres-replica
-  template:
-    metadata:
-      labels:
-        app: postgres-replica
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-storage
     spec:
-      serviceAccountName: event-booking-sa
-      containers:
-      - name: postgres
-        image: postgres:15
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          value: "event_booking"
-        - name: POSTGRES_USER
-          value: "postgres"
-        - name: POSTGRES_PASSWORD
-          value: "password"
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          exec:
-            command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          exec:
-            command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 5
-          periodSeconds: 5
-      volumes:
-      - name: postgres-storage
-        persistentVolumeClaim:
-          claimName: postgres-replica-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-replica
-  namespace: event-booking
-spec:
-  selector:
-    app: postgres-replica
-  ports:
-  - port: 5432
-    targetPort: 5432
-  type: ClusterIP
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi

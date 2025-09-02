@@ -5,9 +5,9 @@ metadata:
   namespace: event-booking
 data:
   # Database Configuration
-  DATABASE_URL: "postgresql://postgres:password@postgres-primary:5432/event_booking"
+  DATABASE_URL: "postgresql://postgres:password@postgres:5432/event_booking"
   REDIS_URL: "redis://redis:6379"
-  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
+  RABBITMQ_URL: "amqp://admin:admin123@rabbitmq:5672"
   KAFKA_BROKERS: "kafka:9092"
   
   # JWT Configuration

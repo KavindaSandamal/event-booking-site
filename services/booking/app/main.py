@@ -14,12 +14,15 @@ import httpx
 from typing import List
 from .circuit_breaker import auth_circuit_breaker, payment_circuit_breaker, catalog_circuit_breaker
 from .retry import async_retry, network_retry, database_retry
-from .event_publisher import event_publisher
-from .event_consumer import setup_event_consumers
-
 DATABASE_URL = os.getenv("DATABASE_URL")
 REDIS_URL = os.getenv("REDIS_URL")
 RABBITMQ_URL = os.getenv("RABBITMQ_URL")
+
+from .event_publisher import EventPublisher
+from .event_consumer import setup_event_consumers
+
+# Create event publisher with RABBITMQ_URL
+event_publisher = EventPublisher(RABBITMQ_URL)
 CATALOG_URL = os.getenv("CATALOG_URL")
 AUTH_URL = os.getenv("AUTH_URL")
 

@@ -5,12 +5,12 @@ metadata:
   namespace: event-booking
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/limit-rps: "100"
 spec:
   ingressClassName: nginx
   rules:
@@ -24,37 +24,35 @@ spec:
             name: nginx-service
             port:
               number: 80
-      - path: /auth
+      - path: /auth(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: auth-service
             port:
               number: 8000
-        annotations:
-          nginx.ingress.kubernetes.io/rewrite-target: /$2
-      - path: /catalog
+      - path: /catalog(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: catalog-service
             port:
               number: 8000
-      - path: /booking
+      - path: /booking(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: booking-service
             port:
               number: 8000
-      - path: /payment
+      - path: /payment(/|$)(.*)
         pathType: Prefix
         backend:
           service:
             name: payment-service
             port:
               number: 8000
-      - path: /
+      - path: /(.*)
         pathType: Prefix
         backend:
           service:

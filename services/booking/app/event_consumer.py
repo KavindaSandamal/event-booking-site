@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from typing import Dict, Any, Callable
 from datetime import datetime
 import aio_pika
@@ -11,8 +12,19 @@ logger = logging.getLogger(__name__)
 class EventConsumer:
     """Consumer for asynchronous event-driven communication."""
     
-    def __init__(self, connection_string: str = "amqp://guest:guest@rabbitmq:5672/"):
-        self.connection_string = connection_string
+    def __init__(self, connection_string: str = None):
+        if connection_string is None:
+            # Build connection string from environment variables
+            rabbitmq_user = os.getenv("RABBITMQ_USER", "admin")
+            rabbitmq_pass = os.getenv("RABBITMQ_PASS", "admin123")
+            rabbitmq_host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+            rabbitmq_port = os.getenv("RABBITMQ_PORT", "5672")
+            rabbitmq_vhost = os.getenv("RABBITMQ_VHOST", "/")
+            
+            # Use RABBITMQ_URL if available, otherwise build from components
+            self.connection_string = os.getenv("RABBITMQ_URL") or f"amqp://{rabbitmq_user}:{rabbitmq_pass}@{rabbitmq_host}:{rabbitmq_port}{rabbitmq_vhost}"
+        else:
+            self.connection_string = connection_string
         self.connection: aio_pika.Connection = None
         self.channel: aio_pika.Channel = None
         self.queues: Dict[str, aio_pika.Queue] = {}
@@ -156,7 +168,7 @@ async def handle_user_registered(event_data: Dict[str, Any]):
         # await send_welcome_email(user_id)
 
 # Global event consumer instance
-event_consumer = EventConsumer()
+event_consumer = EventConsumer(os.getenv("RABBITMQ_URL"))
 
 async def setup_event_consumers():
     """Setup all event consumers."""

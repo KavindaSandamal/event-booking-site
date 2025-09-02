@@ -41,6 +41,21 @@ spec:
             configMapKeyRef:
               name: event-booking-config
               key: CATALOG_URL
+        - name: RABBITMQ_URL
+          valueFrom:
+            configMapKeyRef:
+              name: event-booking-config
+              key: RABBITMQ_URL
+        - name: RABBITMQ_USER
+          value: "admin"
+        - name: RABBITMQ_PASS
+          value: "admin123"
+        - name: RABBITMQ_HOST
+          value: "rabbitmq"
+        - name: RABBITMQ_PORT
+          value: "5672"
+        - name: RABBITMQ_VHOST
+          value: "/"
         resources:
           requests:
             memory: "128Mi"
